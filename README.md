@@ -14,7 +14,7 @@ It contains operations related to converting tokens into embeddings, encoding th
 
 - Embeddings structure
 
-1) Creation of a new embeddings matrix with random filling.
+1) Creation of a new embedding matrix by different methods (Gaussian, Xavier, Uniform).
 2) Converting a vector of tokens into an embeddings matrix.
 3) Saving to a file (safetensors format), and retrieving the embeddings matrix from the file.
 

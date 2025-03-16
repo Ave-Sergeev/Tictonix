@@ -1,6 +1,7 @@
 use ndarray::Array2;
 use rand::distr::{Distribution, Uniform};
 use rand::rng;
+use rand_distr::Normal;
 use std::path::Path;
 
 pub struct Embeddings {
@@ -10,12 +11,41 @@ pub struct Embeddings {
 }
 
 impl Embeddings {
-    /// Создание новой матрицы эмбеддингов со рандомным наполнением
-    pub fn new(vocab_size: usize, embedding_dim: usize) -> Self {
+    /// Инициализация новой матрицы эмбеддингов (равномерное распределение со случайным наполнением)
+    pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Self {
         let mut rng = rng();
         let uniform = Uniform::new_inclusive(-1.0, 1.0).expect("Fail to create a new Uniform instance");
 
         let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| uniform.sample(&mut rng));
+
+        Self {
+            matrix,
+            vocab_size,
+            embedding_dim,
+        }
+    }
+
+    /// Инициализация новой матрицы эмбеддингов (Гауссово распределение)
+    pub fn new_gaussian(vocab_size: usize, embedding_dim: usize, mean: f32, std_dev: f32) -> Self {
+        let mut rng = rand::rng();
+        let normal = Normal::new(mean, std_dev).expect("Fail to create a new Normal instance");
+
+        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng) as f32);
+
+        Self {
+            matrix,
+            vocab_size,
+            embedding_dim,
+        }
+    }
+
+    /// Инициализация новой матрицы эмбеддингов (Xavier (Glorot))
+    pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Self {
+        let mut rng = rand::rng();
+        let std_dev = (2.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
+        let normal = Normal::new(0.0, std_dev).expect("Fail to create a new Normal instance");
+
+        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng) as f32);
 
         Self {
             matrix,
@@ -55,17 +85,55 @@ impl Embeddings {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_embeddings_new() {
+    fn test_embeddings_new_uniform() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings = Embeddings::new(vocab_size, embedding_dim);
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim);
+
+        // Проверяем размеры матрицы
+        assert_eq!(embeddings.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings.vocab_size, vocab_size);
+        assert_eq!(embeddings.embedding_dim, embedding_dim);
+
+        // Проверяем, что все значения находятся в диапазоне [-1.0, 1.0]
+        for &value in embeddings.matrix.iter() {
+            assert!(value >= -1.0 && value <= 1.0);
+        }
+    }
+
+    #[test]
+    fn test_embeddings_new_gaussian() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+        let mean = 0.0f32;
+        let std_dev = 0.01f32;
+
+        let embeddings = Embeddings::new_gaussian(vocab_size, embedding_dim, mean, std_dev);
+
+        // Проверяем размеры матрицы
+        assert_eq!(embeddings.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings.vocab_size, vocab_size);
+        assert_eq!(embeddings.embedding_dim, embedding_dim);
+
+        // Проверяем, что значения близки к среднему (mean)
+        let sum: f32 = embeddings.matrix.iter().sum();
+        let avg = sum / (vocab_size * embedding_dim) as f32;
+        // Проверяем, что среднее близко к 0.0
+        assert!((avg - mean).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_embeddings_new_xavier() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let embeddings = Embeddings::new_xavier(vocab_size, embedding_dim);
 
         // Проверяем размеры матрицы
         assert_eq!(embeddings.matrix.shape(), &[embedding_dim, vocab_size]);
@@ -82,7 +150,7 @@ mod tests {
     fn test_tokens_to_embeddings() {
         let vocab_size = 10;
         let embedding_dim = 5;
-        let embeddings = Embeddings::new(vocab_size, embedding_dim);
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim);
 
         let tokens = vec![0, 3, 7];
         let result = embeddings.tokens_to_embeddings(&tokens).unwrap();
@@ -105,7 +173,7 @@ mod tests {
     fn test_tokens_to_embeddings_out_of_bounds() {
         let vocab_size = 10;
         let embedding_dim = 5;
-        let embeddings = Embeddings::new(vocab_size, embedding_dim);
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim);
 
         // Токен 15 превышает размер словаря (10)
         let tokens = vec![1, 5, 15];
@@ -119,7 +187,7 @@ mod tests {
     fn test_tokens_to_embeddings_empty() {
         let vocab_size = 10;
         let embedding_dim = 5;
-        let embeddings = Embeddings::new(vocab_size, embedding_dim);
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim);
 
         let tokens = vec![];
         let result = embeddings.tokens_to_embeddings(&tokens).unwrap();
@@ -132,7 +200,7 @@ mod tests {
     fn test_get_matrix() {
         let vocab_size = 10;
         let embedding_dim = 5;
-        let embeddings = Embeddings::new(vocab_size, embedding_dim);
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim);
 
         let matrix = embeddings.get_matrix();
 

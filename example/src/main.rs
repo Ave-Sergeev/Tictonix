@@ -5,7 +5,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let embedding_dimension = 3;
     let vocab_size = 10;
 
-    let embeddings = tictonix::Embeddings::new(vocab_size, embedding_dimension);
+    // Для примера используем равномерное распределение со случайным наполнением (new_uniform)
+    let embeddings = tictonix::Embeddings::new_uniform(vocab_size, embedding_dimension);
     println!("Исходная матрица эмбеддингов:\n{}", embeddings.get_matrix());
 
     let mut token_embeddings = embeddings.tokens_to_embeddings(&tokens)?;
