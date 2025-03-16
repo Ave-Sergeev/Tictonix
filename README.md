@@ -10,7 +10,7 @@ This crate is the second step (step 1 [tokenizer](https://github.com/Ave-Sergeev
 `LLM` native implementation on the `Transformer` architecture.
 It contains operations related to converting tokens into embeddings, encoding their positions.
 
-#### Provided functionality:
+### Provided functionality:
 
 - Embeddings structure
 
