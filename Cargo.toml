@@ -1,0 +1,5 @@
+[package]
+name = "tictonix"
+version = "0.1.0"
+authors = ["Artem Sergeev <...>"]
+edition = "2024"
