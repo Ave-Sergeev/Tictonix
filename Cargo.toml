@@ -1,6 +1,6 @@
 [package]
 name = "tictonix"
-version = "0.1.0"
+version = "0.2.0"
 repository = "https://github.com/Ave-Sergeev/Tictonix"
 description = "A library that provides the ability to convert tokens into embeddings, as well as to encode their positions"
 authors = ["Artem Sergeev <...>"]
@@ -21,3 +21,5 @@ rand = "0.9.0"
 rand_distr = "0.5.1"
 approx = "0.5.1"
 ndarray = "0.16.1"
+bytemuck = "1.0"
+safetensors = "0.5.3"

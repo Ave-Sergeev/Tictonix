@@ -1,8 +1,12 @@
+use bytemuck::cast_slice;
 use ndarray::Array2;
 use rand::distr::{Distribution, Uniform};
-use rand::rng;
 use rand_distr::Normal;
-use std::path::Path;
+use safetensors::tensor::TensorView;
+use safetensors::{Dtype, SafeTensors, serialize_to_file};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 
 pub struct Embeddings {
     matrix: Array2<f32>,
@@ -13,7 +17,7 @@ pub struct Embeddings {
 impl Embeddings {
     /// Инициализация новой матрицы эмбеддингов (равномерное распределение со случайным наполнением)
     pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Self {
-        let mut rng = rng();
+        let mut rng = rand::rng();
         let uniform = Uniform::new_inclusive(-1.0, 1.0).expect("Fail to create a new Uniform instance");
 
         let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| uniform.sample(&mut rng));
@@ -45,7 +49,7 @@ impl Embeddings {
         let std_dev = (2.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
         let normal = Normal::new(0.0, std_dev).expect("Fail to create a new Normal instance");
 
-        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng) as f32);
+        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng));
 
         Self {
             matrix,
@@ -75,19 +79,63 @@ impl Embeddings {
     }
 
     /// Сохранение матрицы эмбеддингов в файл
-    pub fn save_to_file(&self, path: &Path) -> Result<(), String> {
-        unimplemented!()
+    pub fn save_embeddings_to_file(embeddings: &Array2<f32>, file_path: &str) -> Result<(), String> {
+        let shape = embeddings.shape().to_vec();
+
+        let data = embeddings
+            .as_slice()
+            .unwrap()
+            .iter()
+            .flat_map(|float| float.to_le_bytes())
+            .collect::<Vec<_>>();
+
+        let tensor = TensorView::new(Dtype::F32, shape, &*data).map_err(|err| format!("Tensor create error: {err}"))?;
+
+        let mut tensors_map = HashMap::new();
+        tensors_map.insert("embeddings", tensor);
+
+        serialize_to_file(tensors_map, &None, file_path.as_ref()).map_err(|err| format!("Failed serialize: {err}"))?;
+
+        println!("Матрица эмбеддингов успешно сохранена в файл: {file_path}");
+        Ok(())
     }
 
     /// Загрузки матрицы эмбеддингов из файла
-    pub fn load_from_file(path: &Path) -> Result<Self, String> {
-        unimplemented!()
+    pub fn load_embeddings_from_file(file_path: &str) -> Result<Array2<f32>, String> {
+        let mut buffer = Vec::new();
+
+        File::open(file_path)
+            .map_err(|err| format!("File open error: {err}"))?
+            .read_to_end(&mut buffer)
+            .map_err(|err| format!("Read error: {err}"))?;
+
+        let safe_tensors = SafeTensors::deserialize(&buffer).map_err(|err| format!("Deserialize error: {err}"))?;
+
+        let tensor = safe_tensors
+            .tensor("embeddings")
+            .map_err(|err| format!("Tensor error: {err}"))?;
+
+        if tensor.dtype() != Dtype::F32 {
+            return Err(format!("Invalid Dtype: expected F32, got {:?}", tensor.dtype()));
+        }
+
+        let data_bytes = tensor.data();
+        let data_f32 = cast_slice(data_bytes);
+        let shape = tensor.shape();
+
+        let embeddings = Array2::from_shape_vec((shape[0], shape[1]), data_f32.to_vec())
+            .map_err(|err| format!("Conversion error: {err}"))?;
+
+        println!("Матрица эмбеддингов успешно загружена из файла: {file_path}");
+        Ok(embeddings)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::remove_file;
+    use std::io::Write;
 
     #[test]
     fn test_embeddings_new_uniform() {
@@ -208,5 +256,53 @@ mod tests {
         assert_eq!(matrix.shape(), &[embedding_dim, vocab_size]);
         // Проверяем, что матрица совпадает с оригинальной
         assert_eq!(*matrix, embeddings.matrix);
+    }
+
+    #[test]
+    fn test_save_and_load_embeddings() {
+        // Создаем тестовую матрицу эмбеддингов
+        let embeddings = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let file_path = "test_embeddings.safetensors";
+
+        // Сохраняем матрицу в файл
+        Embeddings::save_embeddings_to_file(&embeddings, file_path).expect("Failed to save embeddings");
+
+        // Загружаем матрицу из файла
+        let loaded_embeddings = Embeddings::load_embeddings_from_file(file_path).expect("Failed to load embeddings");
+
+        // Проверяем, что загруженная матрица совпадает с исходной
+        assert_eq!(embeddings, loaded_embeddings);
+
+        // Удаляем временный файл после теста
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_load_invalid_file() {
+        // Создаем файл с некорректными данными
+        let file_path = "invalid_embeddings.safetensors";
+        let mut file = File::create(file_path).expect("Failed to create test file");
+        file.write_all(b"invalid data").expect("Failed to write test data");
+
+        // Пытаемся загрузить матрицу из файла
+        let result = Embeddings::load_embeddings_from_file(file_path);
+
+        // Проверяем, что функция возвращает ошибку
+        assert!(result.is_err());
+
+        // Удаляем временный файл после теста
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_save_invalid_path() {
+        // Пытаемся сохранить матрицу в несуществующую директорию
+        let embeddings = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let file_path = "non_directory/test_embeddings.safetensors";
+
+        // Проверяем, что функция возвращает ошибку
+        let result = Embeddings::save_embeddings_to_file(&embeddings, file_path);
+
+        assert!(result.is_err());
     }
 }
