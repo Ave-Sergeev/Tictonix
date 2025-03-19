@@ -10,54 +10,53 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // ---------------------------------------------------------------------------------- //
 
-    // Инициализируем новую матрицу эмбеддингов (Xavier (Glorot))
+    // Initialize a new embedding matrix (Xavier (Glorot))
     let embeddings_xavier = tictonix::Embeddings::new_xavier(vocab_size, embedding_dimension);
-    println!("Исходная матрица Xavier:\n{}", embeddings_xavier.get_matrix());
+    println!("Initialized matrix (Xavier):\n{}", embeddings_xavier.get_matrix());
 
-    // Инициализируем новую матрицу эмбеддингов (Gaussian)
+    // Initialize a new embedding matrix (Gaussian)
     let embeddings_gaussian = tictonix::Embeddings::new_gaussian(vocab_size, embedding_dimension, mean, std_dev);
-    println!("Исходная матрица Gaussian:\n{}", embeddings_gaussian.get_matrix());
+    println!("Initialized matrix (Gaussian):\n{}", embeddings_gaussian.get_matrix());
 
-    // Инициализируем новую матрицу эмбеддингов (Uniform)
+    // Initialize a new embedding matrix (Uniform)
     let embeddings_uniform = tictonix::Embeddings::new_uniform(vocab_size, embedding_dimension);
-    println!("Исходная матрица Uniform:\n{}", embeddings_uniform.get_matrix());
+    println!("Initialized matrix (Uniform):\n{}", embeddings_uniform.get_matrix());
 
     // ---------------------------------------------------------------------------------- //
 
-    // Получим позиционные кодировки (Sinusoidal Positional Encoding)
+    // Let's get positional encodings SPE (Sinusoidal Positional Encoding)
     let positional_sinusoidal = tictonix::PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dimension);
-    println!("Позиционные кодировки (SPE):\n{}", positional_sinusoidal.for_sequence(tokens.len())?);
+    println!("Positional encodingsS (SPE):\n{}", positional_sinusoidal.for_sequence(tokens.len())?);
 
-    // Получим позиционные кодировки (Relative Positional Encoding)
+    // Let's get positional encodings RPE (Relative Positional Encoding)
     let positional_relative = tictonix::PositionalEncoding::new_relative(max_seq_len, embedding_dimension);
-    println!("Позиционные кодировки (RPE):\n{}", positional_relative.for_sequence(tokens.len())?);
+    println!("Positional encodings (RPE):\n{}", positional_relative.for_sequence(tokens.len())?);
 
-    // Получим позиционные кодировки RoPE (Rotary Positional Embedding)
+    // Let's get positional encodings RoPE (Rotary Positional Embedding)
     let positional_rope = tictonix::PositionalEncoding::new_rope(max_seq_len, embedding_dimension);
-    println!("Позиционные кодировки (RoPE):\n{}", positional_rope.for_sequence(tokens.len())?);
+    println!("Positional encodings (RoPE):\n{}", positional_rope.for_sequence(tokens.len())?);
 
-    // Применение RoPE к входной матрице
+    // Applying RoPE to an input matrix
     let input_matrix = Array2::ones((embedding_dimension, max_seq_len));
     let output = positional_rope.apply_rope(&input_matrix);
     println!("Applied RoPE:\n{}", output);
 
     // ---------------------------------------------------------------------------------- //
 
-    // Преобразуем вектор токенов в матрицу эмбеддингов (возьмем Uniform)
+    // Transform the token vector into an embedding matrix (let's take Uniform)
     let mut token_embeddings = embeddings_uniform.tokens_to_embeddings(&tokens)?;
-    println!("Эмбеддинги токенов:\n{}", token_embeddings);
+    println!("Token Embeddings:\n{}", token_embeddings);
 
-    // Применим позиционные кодировки (возьмем SRE) к матрице эмбеддингов
+    // Let's apply positional encodings (let's take SRE) to the embedding matrix
     positional_sinusoidal.add_to_embeddings(&mut token_embeddings)?;
-    println!("Эмбеддинги с позиционными кодировками:\n{}", token_embeddings);
+    println!("Embeddings with positional encodings:\n{}", token_embeddings);
 
-    // Сохраним эмбеддинги токенов с позиционными кодировками (матрицу) в файл
+    // Let's save token embeddings with positional encodings (matrix) to a file
     tictonix::Embeddings::save_embeddings_to_file(&token_embeddings, "./example/test.safetensors")?;
 
-    // Достанем эмбеддинги токенов с позиционными кодировками (матрицу) из файла
-    // Матрица из файла должна совпадать с `Эмбеддинги с позиционными кодировками`
+    // Let's get token embeddings with positional encodings (matrix) from the file
     let load_matrix = tictonix::Embeddings::load_embeddings_from_file("./example/test.safetensors")?;
-    println!("Матрица полученная из файла:\n{}", load_matrix);
+    println!("Matrix obtained from file:\n{}", load_matrix);
 
     Ok(())
 }

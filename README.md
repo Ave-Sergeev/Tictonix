@@ -2,7 +2,7 @@
 
 ---
 
-[Русская версия](README.ru.md)
+[Русская версия](https://github.com/Ave-Sergeev/Tictonix/blob/main/README.ru.md)
 
 ### Description
 
@@ -36,28 +36,26 @@ The crate has the following dependencies:
 
 ### Usage
 
-See [example](/example/src/main.rs) for usage.
+See [example](https://github.com/Ave-Sergeev/Tictonix/blob/main/example/src/main.rs) for usage.
 
 ### Glossary
 
 - Tokenization is the process of breaking text into separate elements called tokens.
-  Tokens can be words, characters, subwords, or other units, depending on the chosen tokenization method.
+  Tokens can be words, characters, sub-words, or other units, depending on the chosen tokenization method.
   This process is an important step in text preprocessing for Natural Language Processing (NLP) tasks.
 - LLMs (large language models) are large language models based on deep learning architectures (e.g.,
   Transformer) that are trained on huge amounts of textual data. They are designed to perform a wide
   range of tasks related to natural language processing, such as text generation, translation, question answering,
   classification, and others. LLMs are capable of generalizing knowledge and performing tasks on which they have not
-  been explicitly trained (
-  zero-shot or few-shot learning).
-- Transformer is a neural network architecture proposed in 2017 that uses the attention mechanism (
-  attention mechanism) to process sequences of data such as text. The main advantage of Transformer
-  is its ability to process long sequences and take context into account regardless of the distance
-  between elements of the sequence. This architecture is the basis for most modern LLMs such as GPT, BERT and others.
-  others.
+  been explicitly trained (zero-shot or few-shot learning).
+- Transformer is a neural network architecture proposed in 2017 that uses the attention mechanism to process sequences
+  of data such as text.
+  The main advantage of Transformer is its ability to process long sequences and take context into account regardless of
+  the distance between elements of the sequence.
+  This architecture is the basis for most modern LLMs (such as GPT, BERT and others).
 - Embedding is a numerical (vector) representation of text data (tokens, words, phrases or sentences).
 - Positional Encoding is a technique used in the Transformer architecture to convey information about the order of
-  elements in a
-  sequence. Since Transformer has no built-in order information (unlike recurrent networks),
+  elements in a sequence. Since Transformer has no built-in order information (unlike recurrent networks),
   positional encoding adds special signals to token embeddings that depend on their position in the sequence.
   sequence. This allows the model to take into account the order of words or other elements in the input data.
 

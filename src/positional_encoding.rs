@@ -7,7 +7,7 @@ pub struct PositionalEncoding {
 }
 
 impl PositionalEncoding {
-    /// Инициализация новой матрицы позиционных кодировок SPE (Sinusoidal Positional Encoding)
+    /// Initialization of the new matrix of positional encodings SPE (Sinusoidal Positional Encoding)
     pub fn new_sinusoidal(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -26,7 +26,7 @@ impl PositionalEncoding {
         }
     }
 
-    /// Инициализация новой матрицы позиционных кодировок RPE (Relative Positional Encoding)
+    /// Initialization of the new matrix of positional encodings RPE (Relative Positional Encoding)
     pub fn new_relative(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -46,7 +46,7 @@ impl PositionalEncoding {
         }
     }
 
-    /// Инициализация новой матрицы позиционных кодировок RoPE (Rotary Positional Embedding)
+    /// Initialization of the new matrix of positional encodings RoPE (Rotary Positional Embedding)
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -69,38 +69,38 @@ impl PositionalEncoding {
         }
     }
 
-    /// Применение RoPE к входному вектору (использовать для RoPE)
+    /// Applying RoPE to an input vector (for RoPE)
     pub fn apply_rope(&self, input: &Array2<f32>) -> Array2<f32> {
         assert_eq!(input.shape(), &[self.embedding_dim, self.max_seq_len]);
 
-        let mut output = Array2::zeros((self.embedding_dim, self.max_seq_len));
+        let mut output_matrix = Array2::zeros((self.embedding_dim, self.max_seq_len));
 
         for pos in 0..self.max_seq_len {
             for i in (0..self.embedding_dim).step_by(2) {
                 let angle = pos as f32 / 10000.0f32.powf(i as f32 / self.embedding_dim as f32);
 
-                output[[i, pos]] = input[[i, pos]] * angle.cos();
+                output_matrix[[i, pos]] = input[[i, pos]] * angle.cos();
 
                 if i + 1 < self.embedding_dim {
-                    output[[i, pos]] -= input[[i + 1, pos]] * angle.sin();
-                    output[[i + 1, pos]] = input[[i + 1, pos]] * angle.cos() + input[[i, pos]] * angle.sin();
+                    output_matrix[[i, pos]] -= input[[i + 1, pos]] * angle.sin();
+                    output_matrix[[i + 1, pos]] = input[[i + 1, pos]] * angle.cos() + input[[i, pos]] * angle.sin();
                 }
             }
         }
 
-        output
+        output_matrix
     }
 
-    /// Применение позиционных кодировок к матрице эмбеддингов (использовать для SPE, RPE)
-    pub fn add_to_embeddings(&self, embeddings: &mut Array2<f32>) -> Result<(), &'static str> {
+    /// Applying positional encodings to the embedding matrix (for SPE, RPE)
+    pub fn add_to_embeddings(&self, embeddings: &mut Array2<f32>) -> Result<(), String> {
         let seq_len = embeddings.shape()[1];
 
         if seq_len > self.max_seq_len {
-            return Err("Sequence length exceeds maximum sequence length for positional encoding");
+            return Err("Sequence length exceeds maximum sequence length for positional encoding".to_string());
         }
 
         if embeddings.shape()[0] != self.embedding_dim {
-            return Err("Embedding dimension mismatch");
+            return Err("Embedding dimension mismatch".to_string());
         }
 
         let pe_slice = self.encoding.slice(s![.., ..seq_len]);
@@ -109,13 +109,15 @@ impl PositionalEncoding {
         Ok(())
     }
 
-    /// Возврат части матрицы позиционных кодировок для последовательности
-    pub fn for_sequence(&self, seq_len: usize) -> Result<Array2<f32>, &'static str> {
+    /// Return part of the positional encoding matrix for a sequence
+    pub fn for_sequence(&self, seq_len: usize) -> Result<Array2<f32>, String> {
         if seq_len > self.max_seq_len {
-            return Err("Requested sequence length exceeds maximum sequence length");
+            return Err("Requested sequence length exceeds maximum sequence length".to_string());
         }
 
-        Ok(self.encoding.slice(s![.., ..seq_len]).to_owned())
+        let pe_slice = self.encoding.slice(s![.., ..seq_len]).to_owned();
+
+        Ok(pe_slice)
     }
 }
 
@@ -130,22 +132,15 @@ mod tests {
         let max_seq_len = 10;
         let embedding_dim = 6;
 
-        let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
+        let pe_sinusoidal = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
-        // Проверяем размеры матрицы
-        assert_eq!(positional_encoding.encoding.shape(), &[embedding_dim, max_seq_len]);
-        assert_eq!(positional_encoding.max_seq_len, max_seq_len);
-        assert_eq!(positional_encoding.embedding_dim, embedding_dim);
+        assert_eq!(pe_sinusoidal.encoding.shape(), &[embedding_dim, max_seq_len]);
+        assert_eq!(pe_sinusoidal.max_seq_len, max_seq_len);
+        assert_eq!(pe_sinusoidal.embedding_dim, embedding_dim);
 
-        // Проверяем правильность формулы для нескольких значений
-        // Для pos=0, i=0: sin(0 / 10000^(0/6)) = sin(0) = 0
-        assert_abs_diff_eq!(positional_encoding.encoding[[0, 0]], 0.0, epsilon = 1e-6);
-
-        // Для pos=1, i=0: sin(1 / 10000^(0/6)) = sin(1/1) = sin(1)
-        assert_abs_diff_eq!(positional_encoding.encoding[[0, 1]], f32::sin(1.0), epsilon = 1e-6);
-
-        // Для pos=0, i=1: cos(0 / 10000^(0/6)) = cos(0) = 1
-        assert_abs_diff_eq!(positional_encoding.encoding[[1, 0]], 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_sinusoidal.encoding[[0, 0]], 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_sinusoidal.encoding[[0, 1]], f32::sin(1.0), epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_sinusoidal.encoding[[1, 0]], 1.0, epsilon = 1e-6);
     }
 
     #[test]
@@ -154,16 +149,14 @@ mod tests {
         let embedding_dim = 6;
         let center = 5;
 
-        let positional_encoding = PositionalEncoding::new_relative(max_seq_len, embedding_dim);
+        let pe_relative = PositionalEncoding::new_relative(max_seq_len, embedding_dim);
 
-        // Проверяем размеры матрицы
-        assert_eq!(positional_encoding.encoding.shape(), &[embedding_dim, max_seq_len]);
-        assert_eq!(positional_encoding.max_seq_len, max_seq_len);
-        assert_eq!(positional_encoding.embedding_dim, embedding_dim);
+        assert_eq!(pe_relative.encoding.shape(), &[embedding_dim, max_seq_len]);
+        assert_eq!(pe_relative.max_seq_len, max_seq_len);
+        assert_eq!(pe_relative.embedding_dim, embedding_dim);
 
-        // Проверка, что центральная позиция имеет нулевое кодирование
-        assert_abs_diff_eq!(positional_encoding.encoding[[0, center]], 0.0, epsilon = 1e-6);
-        assert_abs_diff_eq!(positional_encoding.encoding[[1, center]], 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_relative.encoding[[0, center]], 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_relative.encoding[[1, center]], 1.0, epsilon = 1e-6);
     }
 
     #[test]
@@ -171,17 +164,15 @@ mod tests {
         let max_seq_len = 10;
         let embedding_dim = 6;
 
-        let positional_encoding = PositionalEncoding::new_rope(max_seq_len, embedding_dim);
+        let pe_rope = PositionalEncoding::new_rope(max_seq_len, embedding_dim);
 
-        // Проверяем размеры матрицы
-        assert_eq!(positional_encoding.encoding.shape(), &[embedding_dim, max_seq_len]);
-        assert_eq!(positional_encoding.max_seq_len, max_seq_len);
-        assert_eq!(positional_encoding.embedding_dim, embedding_dim);
+        assert_eq!(pe_rope.encoding.shape(), &[embedding_dim, max_seq_len]);
+        assert_eq!(pe_rope.max_seq_len, max_seq_len);
+        assert_eq!(pe_rope.embedding_dim, embedding_dim);
 
-        // Проверка чередования синуса и косинуса
-        assert!(positional_encoding.encoding[[0, 0]].abs() <= 1.0);
-        assert!(positional_encoding.encoding[[1, 0]].abs() <= 1.0);
-        assert_ne!(positional_encoding.encoding[[0, 0]], positional_encoding.encoding[[1, 0]]);
+        assert!(pe_rope.encoding[[0, 0]].abs() <= 1.0);
+        assert!(pe_rope.encoding[[1, 0]].abs() <= 1.0);
+        assert_ne!(pe_rope.encoding[[0, 0]], pe_rope.encoding[[1, 0]]);
     }
 
     #[test]
@@ -189,34 +180,30 @@ mod tests {
         let max_seq_len = 10;
         let embedding_dim = 6;
 
-        let positional_encoding = PositionalEncoding::new_rope(max_seq_len, embedding_dim);
-        let input = Array2::ones((embedding_dim, max_seq_len));
-        let output = positional_encoding.apply_rope(&input);
+        let pe_rope = PositionalEncoding::new_rope(max_seq_len, embedding_dim);
 
-        // Проверка формы выходного массива
+        let input = Array2::ones((embedding_dim, max_seq_len));
+        let output = pe_rope.apply_rope(&input);
+
         assert_eq!(output.shape(), &[embedding_dim, max_seq_len]);
 
-        // Проверка, что выход отличается от входа (кроме позиции 0)
         assert_ne!(output, input);
 
-        // Проверка сохранения нормы для каждой пары элементов
         for pos in 0..max_seq_len {
             for i in (0..embedding_dim).step_by(2) {
                 if i + 1 < embedding_dim {
-                    let input_norm = (input[[i, pos]].powi(2) + input[[i+1, pos]].powi(2)).sqrt();
-                    let output_norm = (output[[i, pos]].powi(2) + output[[i+1, pos]].powi(2)).sqrt();
+                    let input_norm = (input[[i, pos]].powi(2) + input[[i + 1, pos]].powi(2)).sqrt();
+                    let output_norm = (output[[i, pos]].powi(2) + output[[i + 1, pos]].powi(2)).sqrt();
 
                     assert_abs_diff_eq!(input_norm, output_norm, epsilon = 1e-6);
                 }
             }
         }
 
-        // Дополнительная проверка для позиции 0 (должна сохранять значения)
         let pos0_input = input.column(0).to_owned();
         let pos0_output = output.column(0).to_owned();
         assert_eq!(pos0_input, pos0_output);
 
-        // Проверка специфичных значений для позиции 1
         let pos = 1;
         let i = 0;
         let angle = pos as f32 / 10000.0f32.powf(i as f32 / embedding_dim as f32);
@@ -224,20 +211,19 @@ mod tests {
         let expected_i1 = angle.cos() + angle.sin();
 
         assert_abs_diff_eq!(output[[i, pos]], expected_i, epsilon = 1e-6);
-        assert_abs_diff_eq!(output[[i+1, pos]], expected_i1, epsilon = 1e-6);
+        assert_abs_diff_eq!(output[[i + 1, pos]], expected_i1, epsilon = 1e-6);
     }
 
     #[test]
     fn test_add_to_embeddings() {
+        let seq_len = 5;
         let max_seq_len = 10;
         let embedding_dim = 4;
-        let seq_len = 5;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
         let mut embeddings = Array2::zeros((embedding_dim, seq_len));
 
-        // Заполняем эмбеддинги некоторыми значениями
         for i in 0..embedding_dim {
             for j in 0..seq_len {
                 embeddings[[i, j]] = (i * seq_len + j) as f32;
@@ -250,7 +236,6 @@ mod tests {
 
         assert!(result.is_ok());
 
-        // Проверяем, что эмбеддинги изменились правильно
         for i in 0..embedding_dim {
             for j in 0..seq_len {
                 assert_abs_diff_eq!(
@@ -264,9 +249,9 @@ mod tests {
 
     #[test]
     fn test_add_to_embeddings_sequence_too_long() {
+        let seq_len = 10;
         let max_seq_len = 5;
         let embedding_dim = 4;
-        let seq_len = 10;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
         let mut embeddings = Array2::zeros((embedding_dim, seq_len));
@@ -282,10 +267,10 @@ mod tests {
 
     #[test]
     fn test_add_to_embeddings_dimension_mismatch() {
+        let seq_len = 5;
+        let wrong_dim = 6;
         let max_seq_len = 10;
         let embedding_dim = 4;
-        let wrong_dim = 6;
-        let seq_len = 5;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
         let mut embeddings = Array2::zeros((wrong_dim, seq_len));
@@ -298,9 +283,9 @@ mod tests {
 
     #[test]
     fn test_for_sequence() {
+        let seq_len = 5;
         let max_seq_len = 10;
         let embedding_dim = 4;
-        let seq_len = 5;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
@@ -311,7 +296,6 @@ mod tests {
 
         assert_eq!(pe_subset.shape(), &[embedding_dim, seq_len]);
 
-        // Проверяем, что значения соответствуют ожидаемым
         for i in 0..embedding_dim {
             for j in 0..seq_len {
                 assert_abs_diff_eq!(pe_subset[[i, j]], positional_encoding.encoding[[i, j]], epsilon = 1e-6);
@@ -321,9 +305,9 @@ mod tests {
 
     #[test]
     fn test_for_sequence_too_long() {
+        let seq_len = 10;
         let max_seq_len = 5;
         let embedding_dim = 4;
-        let seq_len = 10; // Больше, чем max_seq_len
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
