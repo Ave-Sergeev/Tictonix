@@ -1,5 +1,6 @@
 use bytemuck::cast_slice;
 use ndarray::Array2;
+use rand::Rng;
 use rand::distr::{Distribution, Uniform};
 use rand_distr::Normal;
 use safetensors::tensor::TensorView;
@@ -34,7 +35,7 @@ impl Embeddings {
         let mut rng = rand::rng();
         let normal = Normal::new(mean, std_dev).expect("Fail to create a new Normal instance");
 
-        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng) as f32);
+        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng));
 
         Self {
             matrix,
@@ -46,10 +47,9 @@ impl Embeddings {
     /// Инициализация новой матрицы эмбеддингов (Xavier (Glorot))
     pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Self {
         let mut rng = rand::rng();
-        let std_dev = (2.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
-        let normal = Normal::new(0.0, std_dev).expect("Fail to create a new Normal instance");
+        let std_dev = (6.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
 
-        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng));
+        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| rng.random_range(-std_dev..std_dev));
 
         Self {
             matrix,
@@ -142,15 +142,15 @@ mod tests {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim);
+        let embeddings_uniform = Embeddings::new_uniform(vocab_size, embedding_dim);
 
         // Проверяем размеры матрицы
-        assert_eq!(embeddings.matrix.shape(), &[embedding_dim, vocab_size]);
-        assert_eq!(embeddings.vocab_size, vocab_size);
-        assert_eq!(embeddings.embedding_dim, embedding_dim);
+        assert_eq!(embeddings_uniform.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings_uniform.vocab_size, vocab_size);
+        assert_eq!(embeddings_uniform.embedding_dim, embedding_dim);
 
         // Проверяем, что все значения находятся в диапазоне [-1.0, 1.0]
-        for &value in embeddings.matrix.iter() {
+        for &value in embeddings_uniform.matrix.iter() {
             assert!(value >= -1.0 && value <= 1.0);
         }
     }
@@ -162,15 +162,15 @@ mod tests {
         let mean = 0.0f32;
         let std_dev = 0.01f32;
 
-        let embeddings = Embeddings::new_gaussian(vocab_size, embedding_dim, mean, std_dev);
+        let embeddings_gaussian = Embeddings::new_gaussian(vocab_size, embedding_dim, mean, std_dev);
 
         // Проверяем размеры матрицы
-        assert_eq!(embeddings.matrix.shape(), &[embedding_dim, vocab_size]);
-        assert_eq!(embeddings.vocab_size, vocab_size);
-        assert_eq!(embeddings.embedding_dim, embedding_dim);
+        assert_eq!(embeddings_gaussian.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings_gaussian.vocab_size, vocab_size);
+        assert_eq!(embeddings_gaussian.embedding_dim, embedding_dim);
 
         // Проверяем, что значения близки к среднему (mean)
-        let sum: f32 = embeddings.matrix.iter().sum();
+        let sum: f32 = embeddings_gaussian.matrix.iter().sum();
         let avg = sum / (vocab_size * embedding_dim) as f32;
         // Проверяем, что среднее близко к 0.0
         assert!((avg - mean).abs() < 0.1);
@@ -181,15 +181,15 @@ mod tests {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings = Embeddings::new_xavier(vocab_size, embedding_dim);
+        let embeddings_xavier = Embeddings::new_xavier(vocab_size, embedding_dim);
 
         // Проверяем размеры матрицы
-        assert_eq!(embeddings.matrix.shape(), &[embedding_dim, vocab_size]);
-        assert_eq!(embeddings.vocab_size, vocab_size);
-        assert_eq!(embeddings.embedding_dim, embedding_dim);
+        assert_eq!(embeddings_xavier.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings_xavier.vocab_size, vocab_size);
+        assert_eq!(embeddings_xavier.embedding_dim, embedding_dim);
 
         // Проверяем, что все значения находятся в диапазоне [-1.0, 1.0]
-        for &value in embeddings.matrix.iter() {
+        for &value in embeddings_xavier.matrix.iter() {
             assert!(value >= -1.0 && value <= 1.0);
         }
     }

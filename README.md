@@ -14,13 +14,14 @@ It contains operations related to converting tokens into embeddings, encoding th
 
 - Embeddings structure
 
-1) Creation of a new embedding matrix by different methods (Gaussian, Xavier, Uniform).
+1) Creation of a new embedding matrix by different methods (`Gaussian`, `Xavier`, `Uniform`).
 2) Converting a vector of tokens into an embeddings matrix.
 3) Saving to a file (.safetensors format), and retrieving the embeddings matrix from the file.
 
 - Structure of PositionalEncoding
 
-1) Creating a new matrix of positional encodings.
+1) Creation of a new positional encoding matrix by various methods such as:
+   `Sinusoidal Positional Encoding`, `Relative Positional Encoding`, `Rotary Positional Embedding`.
 2) Applying positional encodings to the embeddings matrix.
 3) Return a portion of the positional encoding matrix for the sequence.
 
