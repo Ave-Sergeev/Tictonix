@@ -8,6 +8,13 @@ pub struct PositionalEncoding {
 
 impl PositionalEncoding {
     /// Initialization of the new matrix of positional encodings SPE (Sinusoidal Positional Encoding)
+    ///
+    /// # Parameters
+    /// - `max_seq_len`: Maximum sequence length (number of tokens).
+    /// - `embedding_dim`: Dimension of embeddings (length of vector for each token).
+    ///
+    /// # Returns
+    /// An instance of a structure with a matrix of sinusoidal embeddings.
     pub fn new_sinusoidal(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -27,6 +34,13 @@ impl PositionalEncoding {
     }
 
     /// Initialization of the new matrix of positional encodings RPE (Relative Positional Encoding)
+    ///
+    /// # Parameters
+    /// - `max_seq_len`: Maximum sequence length (number of tokens).
+    /// - `embedding_dim`: Dimension of embeddings (length of vector for each token).
+    ///
+    /// # Returns
+    /// An instance of a structure with a matrix of relative embeddings.
     pub fn new_relative(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -47,6 +61,13 @@ impl PositionalEncoding {
     }
 
     /// Initialization of the new matrix of positional encodings RoPE (Rotary Positional Embedding)
+    ///
+    /// # Parameters
+    /// - `max_seq_len`: Maximum sequence length (number of tokens).
+    /// - `embedding_dim`: Dimension of embeddings (length of vector for each token).
+    ///
+    /// # Returns
+    /// A struct instance with an embedding matrix initialized using RoPE.
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -70,6 +91,12 @@ impl PositionalEncoding {
     }
 
     /// Applying RoPE to an input vector (for RoPE)
+    ///
+    /// # Parameters
+    /// - `input`: Input embedding matrix to apply RoPE to.
+    ///
+    /// # Returns
+    /// The embedding matrix with RoPE applied.
     pub fn apply_rope(&self, input: &Array2<f32>) -> Array2<f32> {
         assert_eq!(input.shape(), &[self.embedding_dim, self.max_seq_len]);
 
@@ -92,6 +119,13 @@ impl PositionalEncoding {
     }
 
     /// Applying positional encodings to the embedding matrix (for SPE, RPE)
+    ///
+    /// # Parameters
+    /// - `embeddings`: Input matrix of embeddings to which positional embeddings are added.
+    ///
+    /// # Returns
+    /// - `Ok(())`: If the operation was successful.
+    /// - `Err(String)`: Error if the sequence length exceeds the maximum or if the dimensions of the embeddings do not match.
     pub fn add_to_embeddings(&self, embeddings: &mut Array2<f32>) -> Result<(), String> {
         let seq_len = embeddings.shape()[1];
 
@@ -110,6 +144,13 @@ impl PositionalEncoding {
     }
 
     /// Return part of the positional encoding matrix for a sequence
+    ///
+    /// # Parameters
+    /// - `seq_len`: Length of the sequence for which positional embeddings are required.
+    ///
+    /// # Returns
+    /// - `Ok(Array2<f32>)`: Matrix of positional embeddings for the specified sequence length.
+    /// - `Err(String)`: Error if the requested sequence length exceeds the maximum.
     pub fn for_sequence(&self, seq_len: usize) -> Result<Array2<f32>, String> {
         if seq_len > self.max_seq_len {
             return Err("Requested sequence length exceeds maximum sequence length".to_string());

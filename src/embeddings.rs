@@ -17,6 +17,13 @@ pub struct Embeddings {
 
 impl Embeddings {
     /// Initialization of a new embedding matrix (uniform distribution with random filling)
+    ///
+    /// # Parameters
+    /// - `vocab_size`: Size of the vocabulary (number of tokens).
+    /// - `embedding_dim`: Dimensionality of the embeddings (length of the vector for each token).
+    ///
+    /// # Returns
+    /// An `Embeddings` instance with a matrix filled with values from a uniform distribution in the range `[-1.0, 1.0]`.
     pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Self {
         let mut rng = rand::rng();
         let uniform = Uniform::new_inclusive(-1.0, 1.0).expect("Fail to create a new Uniform instance");
@@ -31,6 +38,13 @@ impl Embeddings {
     }
 
     /// Initializing a new embedding matrix (Gaussian distribution)
+    ///
+    /// # Parameters
+    /// - `vocab_size`: Size of the vocabulary (number of tokens).
+    /// - `embedding_dim`: Dimensionality of the embeddings (length of the vector for each token).
+    ///
+    /// # Returns
+    /// An `Embeddings` instance with a matrix filled with values from the normal distribution.
     pub fn new_gaussian(vocab_size: usize, embedding_dim: usize, mean: f32, std_dev: f32) -> Self {
         let mut rng = rand::rng();
         let normal = Normal::new(mean, std_dev).expect("Fail to create a new Normal instance");
@@ -45,6 +59,13 @@ impl Embeddings {
     }
 
     /// Initializing a new embedding matrix (Xavier (Glorot))
+    ///
+    /// # Parameters
+    /// - `vocab_size`: Size of the vocabulary (number of tokens).
+    /// - `embedding_dim`: Dimensionality of the embeddings (length of the vector for each token).
+    ///
+    /// # Returns
+    /// An `Embeddings` instance with a matrix filled with values initialized by the Xavier method.
     pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Self {
         let mut rng = rand::rng();
         let std_dev = (6.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
@@ -59,11 +80,21 @@ impl Embeddings {
     }
 
     /// Getter for embedding matrix
+    ///
+    /// # Returns
+    /// A reference to the `Array2<f32>` matrix containing the embeddings.
     pub fn get_matrix(&self) -> &Array2<f32> {
         &self.matrix
     }
 
     /// Transforming a vector of tokens into an embedding matrix
+    ///
+    /// # Parameters
+    /// - `tokens`: Array of token indices to convert to embeddings.
+    ///
+    /// # Returns
+    /// - `Ok(Array2<f32>)`: Matrix of embeddings, where each column corresponds to a token embedding.
+    /// - `Err(String)`: Error if any token is outside the dictionary.
     pub fn tokens_to_embeddings(&self, tokens: &[usize]) -> Result<Array2<f32>, String> {
         let mut embeddings = Array2::zeros((self.embedding_dim, tokens.len()));
 
@@ -79,6 +110,14 @@ impl Embeddings {
     }
 
     /// Saving the embedding matrix to a file
+    ///
+    /// # Parameters
+    /// - `embeddings`: The `Array2<f32>` embedding matrix to save.
+    /// - `file_path`: The path to the file where the matrix will be saved.
+    ///
+    /// # Returns
+    /// - `Ok(())`: If saving was successful.
+    /// - `Err(String)`: Error if there was a problem creating the tensor, serializing it, or writing it to the file.
     pub fn save_embeddings_to_file(embeddings: &Array2<f32>, file_path: &str) -> Result<(), String> {
         let shape = embeddings.shape().to_vec();
 
@@ -102,6 +141,13 @@ impl Embeddings {
     }
 
     /// Loading embedding matrix from file
+    ///
+    /// # Parameters
+    /// - `file_path`: Path to the file from which to load the matrix.
+    ///
+    /// # Returns
+    /// - `Ok(Array2<f32>)`: The embedding matrix loaded from the file.
+    /// - `Err(String)`: Error if there was a problem opening the file, reading, deserializing, or converting the data.
     pub fn load_embeddings_from_file(file_path: &str) -> Result<Array2<f32>, String> {
         let mut buffer = Vec::new();
 
