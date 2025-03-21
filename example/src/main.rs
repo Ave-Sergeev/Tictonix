@@ -15,11 +15,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Initialized matrix (Xavier):\n{}", embeddings_xavier.get_matrix());
 
     // Initialize a new embedding matrix (Gaussian)
-    let embeddings_gaussian = tictonix::Embeddings::new_gaussian(vocab_size, embedding_dimension, mean, std_dev);
+    let embeddings_gaussian = tictonix::Embeddings::new_gaussian(vocab_size, embedding_dimension, mean, std_dev)?;
     println!("Initialized matrix (Gaussian):\n{}", embeddings_gaussian.get_matrix());
 
     // Initialize a new embedding matrix (Uniform)
-    let embeddings_uniform = tictonix::Embeddings::new_uniform(vocab_size, embedding_dimension);
+    let embeddings_uniform = tictonix::Embeddings::new_uniform(vocab_size, embedding_dimension)?;
     println!("Initialized matrix (Uniform):\n{}", embeddings_uniform.get_matrix());
 
     // ---------------------------------------------------------------------------------- //
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Applying RoPE to an input matrix
     let input_matrix = Array2::ones((embedding_dimension, max_seq_len));
-    let output = positional_rope.apply_rope(&input_matrix);
+    let output = positional_rope.apply_rope(&input_matrix)?;
     println!("Applied RoPE:\n{}", output);
 
     // ---------------------------------------------------------------------------------- //

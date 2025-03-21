@@ -1,3 +1,5 @@
+use crate::error::PositionalEncodingError;
+use anyhow::{Error, Result};
 use ndarray::{Array2, s};
 
 pub struct PositionalEncoding {
@@ -60,14 +62,14 @@ impl PositionalEncoding {
         }
     }
 
-    /// Initialization of the new matrix of positional encodings RoPE (Rotary Positional Embedding)
+    /// Initialization of the new matrix of positional encodings `RoPE` (Rotary Positional Embedding)
     ///
     /// # Parameters
     /// - `max_seq_len`: Maximum sequence length (number of tokens).
     /// - `embedding_dim`: Dimension of embeddings (length of vector for each token).
     ///
     /// # Returns
-    /// A struct instance with an embedding matrix initialized using RoPE.
+    /// A struct instance with an embedding matrix initialized using `RoPE`.
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
         let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
 
@@ -90,15 +92,21 @@ impl PositionalEncoding {
         }
     }
 
-    /// Applying RoPE to an input vector (for RoPE)
+    /// Applying `RoPE` to an input vector
     ///
     /// # Parameters
-    /// - `input`: Input embedding matrix to apply RoPE to.
+    /// - `input`: Input embedding matrix to apply `RoPE` to.
     ///
     /// # Returns
-    /// The embedding matrix with RoPE applied.
-    pub fn apply_rope(&self, input: &Array2<f32>) -> Array2<f32> {
-        assert_eq!(input.shape(), &[self.embedding_dim, self.max_seq_len]);
+    /// - `Ok(Array2<f32>)`: The embedding matrix with `RoPE` applied.
+    /// - `Err(anyhow::Error)`: Error if the input matrix dimensions do not match the expected dimensions.
+    ///
+    /// # Errors
+    /// - `ShapeMismatch`: Occurs if the dimensions of the input matrix do not match the expected embedding dimension and maximum sequence length.
+    pub fn apply_rope(&self, input: &Array2<f32>) -> Result<Array2<f32>, Error> {
+        if input.shape() != [self.embedding_dim, self.max_seq_len] {
+            return Err(Error::from(PositionalEncodingError::ShapeMismatch));
+        }
 
         let mut output_matrix = Array2::zeros((self.embedding_dim, self.max_seq_len));
 
@@ -115,7 +123,7 @@ impl PositionalEncoding {
             }
         }
 
-        output_matrix
+        Ok(output_matrix)
     }
 
     /// Applying positional encodings to the embedding matrix (for SPE, RPE)
@@ -125,16 +133,20 @@ impl PositionalEncoding {
     ///
     /// # Returns
     /// - `Ok(())`: If the operation was successful.
-    /// - `Err(String)`: Error if the sequence length exceeds the maximum or if the dimensions of the embeddings do not match.
-    pub fn add_to_embeddings(&self, embeddings: &mut Array2<f32>) -> Result<(), String> {
+    /// - `Err(anyhow::Error)`: Error if the sequence length exceeds the maximum or if the dimensions of the embeddings do not match.
+    ///
+    /// # Errors
+    /// - `SequenceLengthExceeded`: Occurs if the sequence length of the input embeddings exceeds the maximum sequence length supported by the positional encoding.
+    /// - `EmbeddingDimensionMismatch`: Occurs if the dimensionality of the input embeddings does not match the expected embedding dimension of the positional encoding.
+    pub fn add_to_embeddings(&self, embeddings: &mut Array2<f32>) -> Result<(), Error> {
         let seq_len = embeddings.shape()[1];
 
         if seq_len > self.max_seq_len {
-            return Err("Sequence length exceeds maximum sequence length for positional encoding".to_string());
+            return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
         if embeddings.shape()[0] != self.embedding_dim {
-            return Err("Embedding dimension mismatch".to_string());
+            return Err(Error::from(PositionalEncodingError::EmbeddingDimensionMismatch));
         }
 
         let pe_slice = self.encoding.slice(s![.., ..seq_len]);
@@ -150,10 +162,13 @@ impl PositionalEncoding {
     ///
     /// # Returns
     /// - `Ok(Array2<f32>)`: Matrix of positional embeddings for the specified sequence length.
-    /// - `Err(String)`: Error if the requested sequence length exceeds the maximum.
-    pub fn for_sequence(&self, seq_len: usize) -> Result<Array2<f32>, String> {
+    /// - `Err(anyhow::Error)`: Error if the requested sequence length exceeds the maximum.
+    ///
+    /// # Errors
+    /// - `SequenceLengthExceeded`: Occurs if the requested sequence length exceeds the maximum sequence length supported by the positional encoding.
+    pub fn for_sequence(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
         if seq_len > self.max_seq_len {
-            return Err("Requested sequence length exceeds maximum sequence length".to_string());
+            return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
         let pe_slice = self.encoding.slice(s![.., ..seq_len]).to_owned();
@@ -224,7 +239,7 @@ mod tests {
         let pe_rope = PositionalEncoding::new_rope(max_seq_len, embedding_dim);
 
         let input = Array2::ones((embedding_dim, max_seq_len));
-        let output = pe_rope.apply_rope(&input);
+        let output = pe_rope.apply_rope(&input).unwrap();
 
         assert_eq!(output.shape(), &[embedding_dim, max_seq_len]);
 
@@ -300,10 +315,6 @@ mod tests {
         let result = positional_encoding.add_to_embeddings(&mut embeddings);
 
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            "Sequence length exceeds maximum sequence length for positional encoding"
-        );
     }
 
     #[test]
@@ -319,7 +330,6 @@ mod tests {
         let result = positional_encoding.add_to_embeddings(&mut embeddings);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Embedding dimension mismatch");
     }
 
     #[test]
@@ -355,6 +365,5 @@ mod tests {
         let result = positional_encoding.for_sequence(seq_len);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Requested sequence length exceeds maximum sequence length");
     }
 }

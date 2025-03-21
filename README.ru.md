@@ -27,10 +27,12 @@
 
 1) [rand](https://github.com/rust-random/rand) крейт для генерации псевдо-случайных значений.
 2) [ndarray](https://github.com/rust-ndarray/ndarray) крейт (математический) для эффективной работы с матрицами.
-3) [approx](https://github.com/brendanzab/approx) крейт для работы с приближенными сравнениями чисел с плавающей точкой.
-4) [bytemuck](https://github.com/Lokathor/bytemuck) крейт для преобразования простых типов данных.
-5) [safetensors](https://github.com/huggingface/safetensors) крейт для безопасного хранения тензоров.
-6) ...
+3) [anyhow](https://github.com/dtolnay/anyhow) крейт для идиоматической обработки ошибок.
+4) [approx](https://github.com/brendanzab/approx) крейт для работы с приближенными сравнениями чисел с плавающей точкой.
+5) [bytemuck](https://github.com/Lokathor/bytemuck) крейт для преобразования простых типов данных.
+6) [thiserror](https://github.com/dtolnay/thiserror) крейт для удобного вывода ошибок.
+7) [safetensors](https://github.com/huggingface/safetensors) крейт для безопасного хранения тензоров.
+8) ...
 
 ### Использование
 

@@ -1,4 +1,5 @@
 mod embeddings;
+mod error;
 mod positional_encoding;
 
 pub use crate::embeddings::Embeddings;

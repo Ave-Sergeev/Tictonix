@@ -27,12 +27,14 @@ It contains operations related to converting tokens into embeddings, encoding th
 
 The crate has the following dependencies:
 
-1) [rand](https://github.com/rust-random/rand) crate to generate pseudo-random values.
-2) [ndarray](https://github.com/rust-ndarray/ndarray) crate (math) for efficient matrix handling.
-3) [approx](https://github.com/brendanzab/approx) crate to handle approximate comparisons of floating point numbers.
-4) [bytemuck](https://github.com/Lokathor/bytemuck) crate for converting simple data types.
-5) [safetensors](https://github.com/huggingface/safetensors) crate for safe storage of tensors.
-6) ...
+1) [rand](https://github.com/rust-random/rand) crate for generating pseudo-random values.
+2) [ndarray](https://github.com/rust-ndarray/ndarray) crate (mathematical) for efficient work with matrices.
+3) [anyhow](https://github.com/dtolnay/anyhow) crate for idiomatic error handling.
+4) [approx](https://github.com/brendanzab/approx) crate for working with approximate comparisons of floating-point numbers.
+5) [bytemuck](https://github.com/Lokathor/bytemuck) crate for converting simple data types.
+6) [thiserror](https://github.com/dtolnay/thiserror) crate for convenient error output.
+7) [safetensors](https://github.com/huggingface/safetensors) crate for safe storage of tensors.
+8) ...
 
 ### Usage
 
