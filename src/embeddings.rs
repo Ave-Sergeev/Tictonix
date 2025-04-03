@@ -1,7 +1,7 @@
 use crate::error::EmbeddingError;
 use anyhow::{Error, Result};
 use bytemuck::cast_slice;
-use ndarray::Array2;
+use ndarray::{Array1, Array2};
 use rand::Rng;
 use rand::distr::{Distribution, Uniform};
 use rand_distr::Normal;
@@ -99,10 +99,10 @@ impl Embeddings {
         &self.matrix
     }
 
-    /// Transforming a vector of tokens into an embedding matrix
+    /// Construction of the resulting embedding matrix for an array of tokens (indices) from the original embedding matrix
     ///
     /// # Parameters
-    /// - `tokens`: Array of token indices to convert to embeddings.
+    /// - `tokens`: Array of token indices.
     ///
     /// # Returns
     /// - `Ok(Array2<f32>)`: A matrix of embeddings, where each column corresponds to the embedding of a token.
@@ -110,7 +110,7 @@ impl Embeddings {
     ///
     /// # Errors
     /// - `OutOfVocabularyError`: Occurs if any token index in the `tokens` array is out of bounds for the vocabulary.
-    pub fn tokens_to_embeddings(&self, tokens: &[usize]) -> Result<Array2<f32>, Error> {
+    pub fn get_embeddings(&self, tokens: &[usize]) -> Result<Array2<f32>, Error> {
         let mut embeddings = Array2::zeros((self.embedding_dim, tokens.len()));
 
         for (i, &token) in tokens.iter().enumerate() {
@@ -122,6 +122,52 @@ impl Embeddings {
         }
 
         Ok(embeddings)
+    }
+
+    /// Obtaining an embedding for a specific token (index) from the initial matrix of embeddings
+    ///
+    /// # Parameters
+    /// - `token`: Token index.
+    ///
+    /// # Returns
+    /// - `Ok(Array1<f32>)`: Embedding (one-dimensional array) for a specific token (index).
+    /// - `Err(anyhow::Error)`: Returns an error if the token index is out of bounds of the dictionary.
+    ///
+    /// # Errors
+    /// - `OutOfVocabularyError`: Raised if the token index is out of bounds of the dictionary.
+    pub fn get_embedding(&self, token: usize) -> Result<Array1<f32>, Error> {
+        if token >= self.vocab_size {
+            return Err(Error::from(EmbeddingError::OutOfVocabularyError));
+        }
+
+        Ok(self.matrix.column(token).to_owned())
+    }
+
+    /// Updating the embedding for a specific token (index) in the embedding matrix
+    ///
+    /// # Parameters
+    /// - `index`: Token index for which the embedding needs to be updated.
+    /// - `new_embedding`: New embedding (one-dimensional array) to replace the existing one.
+    ///
+    /// # Returns
+    /// - `Ok(())`: Indicates that the embedding was successfully updated.
+    /// - `Err(anyhow::Error)`: Returns an error if the token index is out of bounds of the dictionary, or the dimension of the new embedding does not match the expected.
+    ///
+    /// # Errors
+    /// - `OutOfVocabularyError`: Raised if the token index is out of bounds of the dictionary.
+    /// - `DimensionMismatchError`: Raised if the dimension of the new embedding does not match the expected embedding dimension.
+    pub fn update_embedding(&mut self, index: usize, new_embedding: Array1<f32>) -> Result<(), Error> {
+        if index >= self.vocab_size {
+            return Err(Error::from(EmbeddingError::OutOfVocabularyError));
+        }
+
+        if new_embedding.len() != self.embedding_dim {
+            return Err(Error::from(EmbeddingError::DimensionMismatchError));
+        }
+
+        self.matrix.column_mut(index).assign(&new_embedding);
+
+        Ok(())
     }
 
     /// Saving the embedding matrix to a file
@@ -211,6 +257,7 @@ impl Embeddings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ndarray::arr1;
     use std::fs::remove_file;
     use std::io::Write;
 
@@ -266,14 +313,14 @@ mod tests {
     }
 
     #[test]
-    fn test_tokens_to_embeddings() {
+    fn test_get_embeddings() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
         let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
 
         let tokens = vec![0, 3, 7];
-        let result = embeddings.tokens_to_embeddings(&tokens).unwrap();
+        let result = embeddings.get_embeddings(&tokens).unwrap();
 
         assert_eq!(result.shape(), &[embedding_dim, tokens.len()]);
 
@@ -288,29 +335,106 @@ mod tests {
     }
 
     #[test]
-    fn test_tokens_to_embeddings_out_of_bounds() {
+    fn test_get_embeddings_out_of_bounds() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
         let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
 
         let tokens = vec![1, 5, 15];
-        let result = embeddings.tokens_to_embeddings(&tokens);
+        let result = embeddings.get_embeddings(&tokens);
 
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_tokens_to_embeddings_empty() {
+    fn test_get_embeddings_empty() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
         let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
 
         let tokens = vec![];
-        let result = embeddings.tokens_to_embeddings(&tokens).unwrap();
+        let result = embeddings.get_embeddings(&tokens).unwrap();
 
         assert_eq!(result.shape(), &[embedding_dim, 0]);
+    }
+
+    #[test]
+    fn test_get_embedding() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+
+        let token = 0;
+        let result = embeddings.get_embedding(token).unwrap();
+
+        assert_eq!(result.shape(), &[embedding_dim]);
+
+        let expected_embedding = embeddings.matrix.column(token);
+        let actual_embedding = result;
+
+        assert_eq!(expected_embedding, actual_embedding);
+    }
+
+    #[test]
+    fn test_get_embedding_out_of_bounds() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+
+        let token = 15;
+        let result = embeddings.get_embedding(token);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_embedding() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let mut embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+
+        let token = 0;
+        let new_embedding = arr1(&[0.0101, 0.2189, -0.1, 0.54, -0.0001]);
+
+        embeddings.update_embedding(token, new_embedding.clone()).unwrap();
+
+        let updated_embedding = embeddings.get_embedding(token).unwrap();
+        assert_eq!(updated_embedding, new_embedding);
+    }
+
+    #[test]
+    fn test_update_embedding_out_of_bounds() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let mut embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+
+        let token = 15;
+        let new_embedding = arr1(&[0.0101, 0.2189, -0.1, 0.54, -0.0001]);
+
+        let result = embeddings.update_embedding(token, new_embedding);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_embedding_dimension_mismatch() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let mut embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+
+        let token = 5;
+        let new_embedding = arr1(&[0.0101, 0.2189, 0.54]);
+
+        let result = embeddings.update_embedding(token, new_embedding);
+
+        assert!(result.is_err());
     }
 
     #[test]

@@ -14,16 +14,16 @@ It contains operations related to converting tokens into embeddings, encoding th
 
 - Embeddings structure
 
-1) Creation of a new embedding matrix by different methods (`Gaussian`, `Xavier`, `Uniform`).
-2) Converting a vector of tokens into an embeddings matrix.
-3) Saving to a file (.safetensors format), and retrieving the embeddings matrix from the file.
+1) Creating a new embedding matrix by various methods such as: `Gaussian`, `Xavier`, `Uniform`.
+2) Constructing the resulting embedding matrix for an array of tokens (indices), and obtaining a specific embedding for a token (index).
+3) Updating (replacing) the embedding for a particular token (index).
+4) Saving to a file (.safetensors format), and retrieving the embedding matrix from the file.
 
 - Structure of PositionalEncoding
 
-1) Creation of a new positional encoding matrix by various methods such as:
-   `Sinusoidal Positional Encoding`, `Relative Positional Encoding`, `Rotary Positional Embedding`.
-2) Applying positional encodings to the embeddings matrix.
-3) Return a portion of the positional encoding matrix for the sequence.
+1) Creating a new positional encoding matrix by various methods such as: `Sinusoidal PE`, `Relative PE`, `Rotary PE`.
+2) Applying positional encodings to the embedding matrix.
+3) Returning a part of the positional encoding matrix for a sequence, and a particular positional encoding by its position.
 
 The crate has the following dependencies:
 

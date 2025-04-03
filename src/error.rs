@@ -6,6 +6,8 @@ pub enum PositionalEncodingError {
     ShapeMismatch,
     #[error("Sequence length exceeds maximum sequence length for positional encoding")]
     SequenceLengthExceeded,
+    #[error("Position is out of range")]
+    PositionOutOfBounds,
     #[error("Embedding dimension mismatch")]
     EmbeddingDimensionMismatch,
 }
@@ -16,7 +18,7 @@ pub enum EmbeddingError {
     UniformCreationFailed(String),
     #[error("Failed to create a new Normal instance: {0}")]
     NormalCreationFailed(String),
-    #[error("Token index is out of vocabulary bounds)")]
+    #[error("Token index is out of vocabulary bounds")]
     OutOfVocabularyError,
     #[error("Failed to convert embeddings to slice")]
     SliceConversionFailed,
@@ -36,4 +38,6 @@ pub enum EmbeddingError {
     InvalidDataType,
     #[error("Failed to convert data to embedding matrix: {0}")]
     DataConversionError(String),
+    #[error("Embedding size mismatch error")]
+    DimensionMismatchError,
 }
