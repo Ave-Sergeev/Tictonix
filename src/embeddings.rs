@@ -119,7 +119,7 @@ impl Embeddings {
     ///
     /// # Returns
     /// A reference to the `Array2<f32>` matrix containing the embeddings.
-    pub fn get_matrix(&self) -> &Array2<f32> {
+    pub fn getter_matrix(&self) -> &Array2<f32> {
         &self.matrix
     }
 
@@ -468,7 +468,7 @@ mod tests {
 
         let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
 
-        let matrix = embeddings.get_matrix();
+        let matrix = embeddings.getter_matrix();
 
         assert_eq!(matrix.shape(), &[embedding_dim, vocab_size]);
         assert_eq!(*matrix, embeddings.matrix);

@@ -18,7 +18,15 @@ impl PositionalEncoding {
     /// # Returns
     /// An instance of a structure with a matrix of sinusoidal embeddings.
     pub fn new_sinusoidal(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let encoding = Self::init_encoding(max_seq_len, embedding_dim);
+        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+
+        for pos in 0..max_seq_len {
+            for i in 0..embedding_dim {
+                let angle = pos as f32 / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
+
+                encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
+            }
+        }
 
         Self {
             encoding,
@@ -63,7 +71,19 @@ impl PositionalEncoding {
     /// # Returns
     /// A struct instance with an embedding matrix initialized using `RoPE`.
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let encoding = Self::init_encoding(max_seq_len, embedding_dim);
+        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+
+        for pos in 0..max_seq_len {
+            for i in (0..embedding_dim).step_by(2) {
+                let theta = Self::get_theta(pos, i, embedding_dim);
+
+                encoding[[i, pos]] = theta.cos();
+
+                if i + 1 < embedding_dim {
+                    encoding[[i + 1, pos]] = theta.sin();
+                }
+            }
+        }
 
         Self {
             encoding,
@@ -88,18 +108,19 @@ impl PositionalEncoding {
             return Err(Error::from(PositionalEncodingError::ShapeMismatch));
         }
 
-        let mut output_matrix = Array2::zeros((self.embedding_dim, self.max_seq_len));
+        let seq_len = input.shape()[1];
+        let encoding = self.get_encoding(seq_len)?;
+        let mut output_matrix = input.clone();
 
-        for pos in 0..self.max_seq_len {
+        for pos in 0..seq_len {
             for i in (0..self.embedding_dim).step_by(2) {
-                let angle = pos as f32 / 10000.0f32.powf(i as f32 / self.embedding_dim as f32);
+                let cos = encoding[[i, pos]];
+                let sin = encoding[[i + 1, pos]];
+                let xi = input[[i, pos]];
+                let xi1 = input[[i + 1, pos]];
 
-                output_matrix[[i, pos]] = input[[i, pos]] * angle.cos();
-
-                if i + 1 < self.embedding_dim {
-                    output_matrix[[i, pos]] -= input[[i + 1, pos]] * angle.sin();
-                    output_matrix[[i + 1, pos]] = input[[i + 1, pos]] * angle.cos() + input[[i, pos]] * angle.sin();
-                }
+                output_matrix[[i, pos]] = xi * cos - xi1 * sin;
+                output_matrix[[i + 1, pos]] = xi * sin + xi1 * cos;
             }
         }
 
@@ -175,18 +196,27 @@ impl PositionalEncoding {
         Ok(self.encoding.column(position).to_owned())
     }
 
-    fn init_encoding(max_seq_len: usize, embedding_dim: usize) -> Array2<f32> {
-        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+    /// Getter for positional encoding matrix
+    ///
+    /// # Returns
+    /// A reference to the `Array2<f32>` matrix containing the positional encoding.
+    pub fn getter_encoding(&self) -> &Array2<f32> {
+        &self.encoding
+    }
 
-        for pos in 0..max_seq_len {
-            for i in 0..embedding_dim {
-                let angle = pos as f32 / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
+    fn get_theta(pos: usize, i: usize, dim: usize) -> f32 {
+        let base: f32 = 10000.0;
+        let exponent: f32 = (2 * (i / 2)) as f32 / dim as f32;
 
-                encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
-            }
+        pos as f32 / base.powf(exponent)
+    }
+
+    fn get_encoding(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
+        if seq_len > self.max_seq_len {
+            return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
-        encoding
+        Ok(self.encoding.slice(s![.., ..seq_len]).to_owned())
     }
 }
 
