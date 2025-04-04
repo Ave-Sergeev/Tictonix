@@ -14,6 +14,8 @@ pub enum PositionalEncodingError {
 
 #[derive(Debug, Error)]
 pub enum EmbeddingError {
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
     #[error("Failed to create Uniform distribution: {0}")]
     UniformCreationFailed(String),
     #[error("Failed to create a new Normal instance: {0}")]

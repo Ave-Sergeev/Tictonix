@@ -18,15 +18,7 @@ impl PositionalEncoding {
     /// # Returns
     /// An instance of a structure with a matrix of sinusoidal embeddings.
     pub fn new_sinusoidal(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
-
-        for pos in 0..max_seq_len {
-            for i in 0..embedding_dim {
-                let angle = pos as f32 / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
-
-                encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
-            }
-        }
+        let encoding = Self::init_encoding(max_seq_len, embedding_dim);
 
         Self {
             encoding,
@@ -71,19 +63,7 @@ impl PositionalEncoding {
     /// # Returns
     /// A struct instance with an embedding matrix initialized using `RoPE`.
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
-
-        for pos in 0..max_seq_len {
-            for i in 0..embedding_dim {
-                let angle = pos as f32 / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
-
-                if i % 2 == 0 {
-                    encoding[[i, pos]] = angle.sin();
-                } else {
-                    encoding[[i, pos]] = angle.cos();
-                }
-            }
-        }
+        let encoding = Self::init_encoding(max_seq_len, embedding_dim);
 
         Self {
             encoding,
@@ -193,6 +173,20 @@ impl PositionalEncoding {
         }
 
         Ok(self.encoding.column(position).to_owned())
+    }
+
+    fn init_encoding(max_seq_len: usize, embedding_dim: usize) -> Array2<f32> {
+        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+
+        for pos in 0..max_seq_len {
+            for i in 0..embedding_dim {
+                let angle = pos as f32 / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
+
+                encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
+            }
+        }
+
+        encoding
     }
 }
 

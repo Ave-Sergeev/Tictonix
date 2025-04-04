@@ -26,11 +26,18 @@ impl Embeddings {
     ///
     /// # Returns
     /// - `Ok(Self)`: An `Embeddings` instance with a matrix filled with values from a uniform distribution in the range `[-1.0, 1.0]`.
-    /// - `Err(anyhow::Error)`: An error is returned if the uniform distribution cannot be created.
+    /// - `Err(anyhow::Error)`: An error is returned if the uniform distribution cannot be created, or input parameters are invalid.
     ///
     /// # Errors
+    /// - `InvalidInput`: Occurs if the input parameters are invalid.
     /// - `UniformCreationFailed`: Occurs if the uniform distribution cannot be created within the specified range `[-1.0, 1.0]`.
     pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
+        if vocab_size == 0 || embedding_dim == 0 {
+            return Err(Error::from(EmbeddingError::InvalidInput(
+                "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
+            )));
+        }
+
         let mut rng = rand::rng();
         let uniform =
             Uniform::new_inclusive(-1.0, 1.0).map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
@@ -53,11 +60,18 @@ impl Embeddings {
     ///
     /// # Returns
     /// - `Ok(Self)`: An `Embeddings` instance with a matrix filled with values from the normal distribution.
-    /// - `Err(anyhow::Error)`: An error is returned if the normal distribution cannot be created.
+    /// - `Err(anyhow::Error)`: An error is returned if the normal distribution cannot be created, or input parameters are invalid.
     ///
     /// # Errors
+    /// - `InvalidInput`: Occurs if the input parameters are invalid.
     /// - `NormalCreationFailed`: Occurs if the normal (Gaussian) distribution cannot be created with the specified mean and standard deviation.
     pub fn new_gaussian(vocab_size: usize, embedding_dim: usize, mean: f32, std_dev: f32) -> Result<Self, Error> {
+        if vocab_size == 0 || embedding_dim == 0 {
+            return Err(Error::from(EmbeddingError::InvalidInput(
+                "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
+            )));
+        }
+
         let mut rng = rand::rng();
         let normal = Normal::new(mean, std_dev).map_err(|err| EmbeddingError::NormalCreationFailed(err.to_string()))?;
 
@@ -77,18 +91,28 @@ impl Embeddings {
     /// - `embedding_dim`: Dimensionality of the embeddings (length of the vector for each token).
     ///
     /// # Returns
-    /// An `Embeddings` instance with a matrix filled with values initialized by the Xavier method.
-    pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Self {
+    /// - `Ok(Self)`: An `Embeddings` instance with a matrix filled with values initialized by the Xavier method.
+    /// - `Err(anyhow::Error)`: An error is returned if the input parameters are invalid (zero).
+    ///
+    /// # Errors
+    /// - `InvalidInput`: Occurs if the input parameters are invalid.
+    pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
+        if vocab_size == 0 || embedding_dim == 0 {
+            return Err(Error::from(EmbeddingError::InvalidInput(
+                "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
+            )));
+        }
+
         let mut rng = rand::rng();
         let std_dev = (6.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
 
         let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| rng.random_range(-std_dev..std_dev));
 
-        Self {
+        Ok(Self {
             matrix,
             vocab_size,
             embedding_dim,
-        }
+        })
     }
 
     /// Getter for embedding matrix
@@ -203,7 +227,7 @@ impl Embeddings {
         serialize_to_file(tensors_map, &None, file_path.as_ref())
             .map_err(|err| EmbeddingError::SerializationFailed(err.to_string()))?;
 
-        println!("Embedding matrix successfully saved to file: {file_path}");
+        println!("Embedding matrix successfully saved to file: {file_path}\n");
         Ok(())
     }
 
@@ -249,7 +273,7 @@ impl Embeddings {
         let embeddings = Array2::from_shape_vec((shape[0], shape[1]), data_f32.to_vec())
             .map_err(|err| EmbeddingError::DataConversionError(err.to_string()))?;
 
-        println!("Embedding matrix successfully loaded from file: {file_path}");
+        println!("Embedding matrix successfully loaded from file: {file_path}\n");
         Ok(embeddings)
     }
 }
@@ -301,7 +325,7 @@ mod tests {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings_xavier = Embeddings::new_xavier(vocab_size, embedding_dim);
+        let embeddings_xavier = Embeddings::new_xavier(vocab_size, embedding_dim).unwrap();
 
         assert_eq!(embeddings_xavier.matrix.shape(), &[embedding_dim, vocab_size]);
         assert_eq!(embeddings_xavier.vocab_size, vocab_size);
