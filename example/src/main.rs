@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Specific token embedding (from Uniform):\n{:.6}\n", specific_token_embedding);
 
     // Let's update the embedding for a certain token (index) in the embedding matrix (let's take Uniform)
-    let _ = embeddings_uniform.update_embedding(tokens[1], specific_token_embedding)?;
+    let _ = embeddings_uniform.update_embedding(tokens[1], &specific_token_embedding)?;
     let altered_matrix = embeddings_uniform.getter_matrix();
     println!("Altered embedding matrix (from Uniform):\n{:.6}\n", altered_matrix);
 
@@ -47,11 +47,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Let's look at how token embeddings can be saved and loaded:
 
     // Let's save token embeddings with positional encodings (matrix) to a file
-    tictonix::Embeddings::save_embeddings_to_file(&token_embeddings, "./example/test.safetensors")?;
+    tictonix::MatrixIO::save_matrix_to_file(&token_embeddings, "./example/test.safetensors")?;
     println!("Matrix saved to file:\n{:.6}\n", token_embeddings);
 
     // Let's get token embeddings with positional encodings (matrix) from the file
-    let load_matrix = tictonix::Embeddings::load_embeddings_from_file("./example/test.safetensors")?;
+    let load_matrix = tictonix::MatrixIO::load_matrix_from_file("./example/test.safetensors")?;
     println!("Matrix obtained from file:\n{:.6}\n", load_matrix);
 
     // ---------------------------------------------------------------------------------- //

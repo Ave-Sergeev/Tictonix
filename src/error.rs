@@ -1,6 +1,28 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+pub enum IOError {
+    #[error("Failed to open file: {0}")]
+    FileOpenError(String),
+    #[error("Failed to read file: {0}")]
+    FileReadError(String),
+    #[error("Invalid data type: expected F32")]
+    InvalidDataType,
+    #[error("Failed to deserialize data: {0}")]
+    DeserializationError(String),
+    #[error("Failed to retrieve tensor: {0}")]
+    TensorRetrievalError(String),
+    #[error("Failed to convert matrix to slice")]
+    SliceConversionFailed,
+    #[error("Failed to create tensor from embeddings: {0}")]
+    TensorCreationFailed(String),
+    #[error("Failed to serialize embeddings to file: {0}")]
+    SerializationFailed(String),
+    #[error("Failed to convert data to embedding matrix: {0}")]
+    DataConversionError(String),
+}
+
+#[derive(Debug, Error)]
 pub enum PositionalEncodingError {
     #[error("Input shape does not match expected dimensions")]
     ShapeMismatch,
@@ -22,24 +44,6 @@ pub enum EmbeddingError {
     NormalCreationFailed(String),
     #[error("Token index is out of vocabulary bounds")]
     OutOfVocabularyError,
-    #[error("Failed to convert embeddings to slice")]
-    SliceConversionFailed,
-    #[error("Failed to create tensor from embeddings: {0}")]
-    TensorCreationFailed(String),
-    #[error("Failed to serialize embeddings to file: {0}")]
-    SerializationFailed(String),
-    #[error("Failed to open file: {0}")]
-    FileOpenError(String),
-    #[error("Failed to read file: {0}")]
-    FileReadError(String),
-    #[error("Failed to deserialize data: {0}")]
-    DeserializationError(String),
-    #[error("Failed to retrieve tensor: {0}")]
-    TensorRetrievalError(String),
-    #[error("Invalid data type: expected F32")]
-    InvalidDataType,
-    #[error("Failed to convert data to embedding matrix: {0}")]
-    DataConversionError(String),
     #[error("Embedding size mismatch error")]
     DimensionMismatchError,
 }

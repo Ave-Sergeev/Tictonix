@@ -376,6 +376,19 @@ mod tests {
     }
 
     #[test]
+    fn test_getter_encoding() {
+        let vocab_size = 10;
+        let embedding_dim = 5;
+
+        let positional_encoding = PositionalEncoding::new_sinusoidal(vocab_size, embedding_dim);
+
+        let matrix = positional_encoding.getter_encoding();
+
+        assert_eq!(matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(*matrix, positional_encoding.encoding);
+    }
+
+    #[test]
     fn test_get_positional_encoding_slice() {
         let seq_len = 5;
         let max_seq_len = 10;

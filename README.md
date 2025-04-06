@@ -2,22 +2,23 @@
 
 ---
 
-[Русская версия](https://github.com/Ave-Sergeev/Tictonix/blob/main/README.ru.md)
+[Russian version](https://github.com/Ave-Sergeev/Tictonix/blob/main/README.ru.md)
 
 ### Description
 
-This crate is the second step (step 1 [tokenizer](https://github.com/Ave-Sergeev/Tokenomicon)) towards a
-`LLM` native implementation on the `Transformer` architecture.
-It contains operations related to converting tokens into embeddings, encoding their positions.
+This crate provides functionality for working with vector representations of words (embeddings) and positional encoding.
+It is intended for use in NLP tasks, deep learning, and your custom projects.
+
+Also, this project is the second step (step 1 [tokenizer](https://github.com/Ave-Sergeev/Tokenomicon)) towards
+own implementation of `LLM` on `Transformer` architecture.
 
 ### Provided functionality:
 
-- Embeddings structure
+- Structure of Embeddings
 
 1) Creating a new embedding matrix by various methods such as: `Gaussian`, `Xavier`, `Uniform`.
 2) Constructing the resulting embedding matrix for an array of tokens (indices), and obtaining a specific embedding for a token (index).
 3) Updating (replacing) the embedding for a particular token (index).
-4) Saving to a file (.safetensors format), and retrieving the embedding matrix from the file.
 
 - Structure of PositionalEncoding
 
@@ -25,7 +26,27 @@ It contains operations related to converting tokens into embeddings, encoding th
 2) Applying positional encodings to the embedding matrix.
 3) Returning a part of the positional encoding matrix for a sequence, and a particular positional encoding by its position.
 
-The crate has the following dependencies:
+- Structure of MatrixIO
+
+1) Saving to a file (.safetensors format), and retrieving the embedding matrix from the file.
+
+### Installing
+
+Add to your `Cargo.toml`:
+```toml
+[dependencies]
+tictonix = "0.7.0"
+```
+
+### Usage
+
+See [examples for usage](https://github.com/Ave-Sergeev/Tictonix/blob/main/example/src/main.rs).
+
+### Documentation
+
+See [documentation](https://docs.rs/tictonix/0.7.0/tictonix/) for the project.
+
+### Dependencies:
 
 1) [rand](https://github.com/rust-random/rand) crate for generating pseudo-random values.
 2) [ndarray](https://github.com/rust-ndarray/ndarray) crate (mathematical) for efficient work with matrices.
@@ -35,10 +56,6 @@ The crate has the following dependencies:
 6) [thiserror](https://github.com/dtolnay/thiserror) crate for convenient error output.
 7) [safetensors](https://github.com/huggingface/safetensors) crate for safe storage of tensors.
 8) ...
-
-### Usage
-
-See [example](https://github.com/Ave-Sergeev/Tictonix/blob/main/example/src/main.rs) for usage.
 
 ### Glossary
 
