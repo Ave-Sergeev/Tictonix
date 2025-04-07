@@ -1,6 +1,9 @@
-## Tictonix
-
----
+<p align="center">
+  <img src="./assets/logo.png" alt="Project Preview" style="width: 55%; height: auto; border-radius: 15px;">
+</p>
+<h1 align="center"> 
+  Tictonix 
+</h1>
 
 [Russian version](https://github.com/Ave-Sergeev/Tictonix/blob/main/README.ru.md)
 
@@ -45,17 +48,6 @@ See [examples for usage](https://github.com/Ave-Sergeev/Tictonix/blob/main/examp
 ### Documentation
 
 See [documentation](https://docs.rs/tictonix/0.7.0/tictonix/) for the project.
-
-### Dependencies:
-
-1) [rand](https://github.com/rust-random/rand) crate for generating pseudo-random values.
-2) [ndarray](https://github.com/rust-ndarray/ndarray) crate (mathematical) for efficient work with matrices.
-3) [anyhow](https://github.com/dtolnay/anyhow) crate for idiomatic error handling.
-4) [approx](https://github.com/brendanzab/approx) crate for working with approximate comparisons of floating-point numbers.
-5) [bytemuck](https://github.com/Lokathor/bytemuck) crate for converting simple data types.
-6) [thiserror](https://github.com/dtolnay/thiserror) crate for convenient error output.
-7) [safetensors](https://github.com/huggingface/safetensors) crate for safe storage of tensors.
-8) ...
 
 ### Glossary
 
