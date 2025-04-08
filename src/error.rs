@@ -20,6 +20,16 @@ pub enum IOError {
     SerializationFailed(String),
     #[error("Failed to convert data to embedding matrix: {0}")]
     DataConversionError(String),
+    #[error("Invalid NPY format")]
+    InvalidFormat,
+    #[error("Unsupported version")]
+    UnsupportedVersion,
+    #[error("Fortran order not supported")]
+    FortranOrderNotSupported,
+    #[error("Shape mismatch")]
+    ShapeMismatch,
+    #[error("Header parse error")]
+    HeaderParseError,
 }
 
 #[derive(Debug, Error)]

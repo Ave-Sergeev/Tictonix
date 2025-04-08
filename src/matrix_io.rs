@@ -2,11 +2,12 @@ use crate::error::IOError;
 use anyhow::{Error, Result};
 use bytemuck::cast_slice;
 use ndarray::Array2;
+use regex::Regex;
 use safetensors::tensor::TensorView;
 use safetensors::{Dtype, SafeTensors, serialize_to_file};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufWriter, Read, Write};
 
 pub struct MatrixIO;
 
@@ -25,7 +26,7 @@ impl MatrixIO {
     /// - `SliceConversionFailed`: Occurs if the matrix cannot be converted to a contiguous slice.
     /// - `TensorCreationFailed`: Occurs if the tensor cannot be created from the matrix data.
     /// - `SerializationFailed`: Occurs if the tensor data cannot be serialized or written to the specified file.
-    pub fn save_matrix_to_file(matrix: &Array2<f32>, file_path: &str) -> Result<(), Error> {
+    pub fn save_to_safetensors(matrix: &Array2<f32>, file_path: &str) -> Result<(), Error> {
         let shape = matrix.shape().to_vec();
 
         let data = matrix
@@ -65,7 +66,7 @@ impl MatrixIO {
     /// - `TensorRetrievalError`: Occurs if the tensor named "matrix" cannot be retrieved from the deserialized data.
     /// - `InvalidDataType`: Occurs if the tensor data type is not `f32`. This ensures the matrix is loaded with the correct data type.
     /// - `DataConversionError`: Occurs if the tensor data cannot be converted into a 2D array (`Array2<f32>`).
-    pub fn load_matrix_from_file(file_path: &str) -> Result<Array2<f32>, Error> {
+    pub fn load_from_safetensors(file_path: &str) -> Result<Array2<f32>, Error> {
         let mut buffer = Vec::new();
 
         File::open(file_path)
@@ -95,6 +96,127 @@ impl MatrixIO {
 
         Ok(matrix)
     }
+
+    /// Saving a matrix to an NPY file (`NumPy` binary format).
+    ///
+    /// # Parameters
+    /// - `matrix`: A reference to a 2D array (`Array2<f32>`) containing the data to be saved.
+    /// - `file_path`: Path to the output file where the NPY data will be written.
+    ///
+    /// # Returns
+    /// - `Ok(())`: Indicates successful writing of the matrix to the file.
+    /// - `Err(anyhow::Error)`: An error if file creation, header serialization, or data writing fails.
+    ///
+    /// # Errors
+    /// - `IOError`: Occurs if the file cannot be created or written to.
+    /// - `InvalidFormat`: Occurs if the matrix cannot be represented as a contiguous slice (e.g., due to non-standard strides).
+    pub fn save_to_npy(matrix: &Array2<f32>, file_path: &str) -> Result<(), Error> {
+        let file = File::create(file_path)?;
+        let mut writer = BufWriter::new(file);
+
+        let shape = matrix.shape();
+        let header = format!("{{'descr': '<f4', 'fortran_order': False, 'shape': ({}, {}), }}", shape[0], shape[1]);
+
+        let header_len = header.len() + 1;
+        let total_len = 10 + header_len;
+        let padding = (64 - (total_len % 64)) % 64;
+
+        writer.write_all(b"\x93NUMPY\x01\x00")?;
+        writer.write_all(&u16::try_from(header_len + padding)?.to_le_bytes())?;
+        writer.write_all(header.as_bytes())?;
+        writer.write_all(b"\n")?;
+        writer.write_all(&vec![b' '; padding])?;
+
+        let data = matrix.as_slice().ok_or(IOError::InvalidFormat)?;
+        for &value in data {
+            writer.write_all(&value.to_le_bytes())?;
+        }
+
+        println!("Matrix successfully saved to file: {file_path}\n");
+
+        Ok(())
+    }
+
+    /// Loads a two-dimensional array of 32-bit floats from an NPY file (`NumPy` binary format).
+    ///
+    /// # Parameters
+    /// - `file_path`: Path to the `.npy` file to load.
+    ///
+    /// # Returns
+    /// - `Ok(Array2<f32>)`: The deserialized matrix with shape and data matching the file.
+    /// - `Err(Error)`: If the file is invalid, unsupported, or contains incompatible data.
+    ///
+    /// # Errors
+    /// - `InvalidFormat`: Occurs if:
+    ///   - The file lacks the NPY magic number (`\x93NUMPY`).
+    ///   - The header is malformed (e.g., invalid JSON, missing keys, or non-float32 `descr`).
+    ///   - The data cannot be parsed as little-endian `f32`.
+    /// - `UnsupportedVersion`: NPY version is not `1.0`.
+    /// - `FortranOrderNotSupported`: The array uses Fortran (column-major) order.
+    /// - `ShapeMismatch`: The actual data length does not match the shape declared in the header.
+    /// - `IOError`: File read failures (e.g., permission issues or premature EOF).
+    /// - `HeaderParseError`: Failed to parse the header (e.g., invalid regex or structure).
+    pub fn load_from_npy(file_path: &str) -> Result<Array2<f32>, Error> {
+        let mut file = File::open(file_path)?;
+        let mut magic = [0u8; 6];
+        let mut version = [0u8; 2];
+        let mut header_len_bytes = [0u8; 2];
+
+        file.read_exact(&mut magic)?;
+
+        if &magic != b"\x93NUMPY" {
+            return Err(Error::from(IOError::InvalidFormat));
+        }
+
+        file.read_exact(&mut version)?;
+
+        if version != [0x01, 0x00] {
+            return Err(Error::from(IOError::UnsupportedVersion));
+        }
+
+        file.read_exact(&mut header_len_bytes)?;
+        let header_len = u16::from_le_bytes(header_len_bytes) as usize;
+
+        let mut header = vec![0u8; header_len];
+        file.read_exact(&mut header)?;
+        let header_str = String::from_utf8(header).map_err(|_| IOError::InvalidFormat)?;
+
+        let (shape, fortran_order) = Self::parse_header(&header_str)?;
+        if fortran_order {
+            return Err(Error::from(IOError::FortranOrderNotSupported));
+        }
+
+        let total_elements = shape.0 * shape.1;
+        let mut data = vec![0f32; total_elements];
+
+        for item in data.iter_mut().take(total_elements) {
+            let mut bytes = [0u8; 4];
+
+            file.read_exact(&mut bytes)?;
+            *item = f32::from_le_bytes(bytes);
+        }
+
+        let matrix = Array2::from_shape_vec(shape, data).map_err(|_| IOError::ShapeMismatch)?;
+
+        println!("Matrix successfully loaded from file: {file_path}\n");
+
+        Ok(matrix)
+    }
+
+    fn parse_header(header: &str) -> Result<((usize, usize), bool), Error> {
+        let re = Regex::new(
+            r"'descr'\s*:\s*'<f4'\s*,\s*'fortran_order'\s*:\s*(True|False)\s*,\s*'shape'\s*:\s*\((\d+)\s*,\s*(\d+)\)",
+        )
+        .map_err(|_| IOError::HeaderParseError)?;
+
+        let caps = re.captures(header).ok_or(IOError::InvalidFormat)?;
+
+        let fortran_order = &caps[1] == "True";
+        let dim1: usize = caps[2].parse().map_err(|_| IOError::InvalidFormat)?;
+        let dim2: usize = caps[3].parse().map_err(|_| IOError::InvalidFormat)?;
+
+        Ok(((dim1, dim2), fortran_order))
+    }
 }
 
 #[cfg(test)]
@@ -104,13 +226,14 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn test_save_and_load_matrix() {
+    fn test_save_and_load_safetensors() {
         let file_path = "test_matrix.safetensors";
+
         let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
 
-        MatrixIO::save_matrix_to_file(&matrix, file_path).expect("Failed to save matrix");
+        MatrixIO::save_to_safetensors(&matrix, file_path).expect("Failed to save matrix");
 
-        let loaded_matrix = MatrixIO::load_matrix_from_file(file_path).expect("Failed to load matrix");
+        let loaded_matrix = MatrixIO::load_from_safetensors(file_path).expect("Failed to load matrix");
 
         assert_eq!(matrix, loaded_matrix);
 
@@ -118,26 +241,69 @@ mod tests {
     }
 
     #[test]
-    fn test_load_invalid_file() {
-        let file_path = "invalid_matrix.safetensors";
-        let mut file = File::create(file_path).expect("Failed to create test file");
+    fn test_save_and_load_npy() {
+        let file_path = "test_matrix.npy";
 
-        file.write_all(b"invalid data").expect("Failed to write test data");
+        let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
 
-        let loaded_matrix = MatrixIO::load_matrix_from_file(file_path);
+        MatrixIO::save_to_npy(&matrix, file_path).expect("Failed to save matrix");
 
-        assert!(loaded_matrix.is_err());
+        let loaded_matrix = MatrixIO::load_from_npy(file_path).expect("Failed to load matrix");
+
+        assert_eq!(matrix, loaded_matrix);
 
         remove_file(file_path).expect("Failed to delete test file");
     }
 
     #[test]
-    fn test_save_invalid_path() {
+    fn test_load_invalid_file_from_safetensors() {
+        let file_path = "invalid_matrix.safetensors";
+
+        let mut file = File::create(file_path).expect("Failed to create test file");
+
+        file.write_all(b"invalid data").expect("Failed to write test data");
+
+        let result = MatrixIO::load_from_safetensors(file_path);
+
+        assert!(result.is_err());
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_load_invalid_file_from_npy() {
+        let file_path = "invalid_matrix.npy";
+
+        let mut file = File::create(file_path).expect("Failed to create test file");
+
+        file.write_all(b"invalid data").expect("Failed to write test data");
+
+        let result = MatrixIO::load_from_npy(file_path);
+
+        assert!(result.is_err());
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_save_invalid_path_for_safetensors() {
         let file_path = "non_existent_directory/test_matrix.safetensors";
+
         let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
 
-        let saved_matrix = MatrixIO::save_matrix_to_file(&matrix, file_path);
+        let result = MatrixIO::save_to_safetensors(&matrix, file_path);
 
-        assert!(saved_matrix.is_err());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_invalid_path_for_npy() {
+        let file_path = "non_existent_directory/test_matrix.npy";
+
+        let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+
+        let result = MatrixIO::save_to_npy(&matrix, file_path);
+
+        assert!(result.is_err());
     }
 }

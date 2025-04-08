@@ -44,18 +44,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // ---------------------------------------------------------------------------------- //
 
-    // Let's look at how token embeddings can be saved and loaded:
-
-    // Let's save token embeddings with positional encodings (matrix) to a file
-    tictonix::MatrixIO::save_matrix_to_file(&token_embeddings, "./example/test.safetensors")?;
-    println!("Matrix saved to file:\n{:.6}\n", token_embeddings);
-
-    // Let's get token embeddings with positional encodings (matrix) from the file
-    let load_matrix = tictonix::MatrixIO::load_matrix_from_file("./example/test.safetensors")?;
-    println!("Matrix obtained from file:\n{:.6}\n", load_matrix);
-
-    // ---------------------------------------------------------------------------------- //
-
     // Let's consider examples of creating a matrix of positional encodings in different ways:
 
     // Obtaining the matrix of position encodings by method SPE (Sinusoidal Positional Encoding) method
@@ -81,7 +69,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Let's get the positional encoding for a sequence (let's take SRE)
     let positional_sinusoidal = tictonix::PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dimension);
-    println!("Obtained positional encoding matrix:\n{:.6}\n", positional_sinusoidal.get_positional_encoding_slice(tokens.len())?);
+    println!(
+        "Obtained positional encoding matrix:\n{:.6}\n",
+        positional_sinusoidal.get_positional_encoding_slice(tokens.len())?
+    );
 
     // Let's get the positional encoding (one-dimensional array) for a specific position in the sequence (let's take SRE)
     let positional_encoding = positional_sinusoidal.get_positional_encoding(position)?;
@@ -90,6 +81,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Let's apply positional encodings (let's take SRE) to the embedding matrix
     positional_sinusoidal.add_to_embeddings(&mut token_embeddings)?;
     println!("Embeddings with positional encodings:\n{:.6}\n", token_embeddings);
+
+    // ---------------------------------------------------------------------------------- //
+
+    // Let's look at how token embeddings can be saved and loaded:
+
+    // Let's save token embeddings with positional encodings (matrix) to a files .npy and .safetensors
+    tictonix::MatrixIO::save_to_safetensors(&token_embeddings, "./test.safetensors")?;
+    tictonix::MatrixIO::save_to_npy(&token_embeddings, "./test.npy")?;
+    println!("Matrix saved to file:\n{:.6}\n", token_embeddings);
+
+    // Let's get token embeddings with positional encodings (matrix) from the file .safetensors
+    let load_safetensors = tictonix::MatrixIO::load_from_safetensors("./test.safetensors")?;
+    println!("Matrix obtained from file .safetensors:\n{:.6}\n", load_safetensors);
+
+    // Let's get token embeddings with positional encodings (matrix) from the file .npy
+    let load_npy = tictonix::MatrixIO::load_from_npy("./test.npy")?;
+    println!("Matrix obtained from file .npy:\n{:.6}\n", load_npy);
 
     // ---------------------------------------------------------------------------------- //
 

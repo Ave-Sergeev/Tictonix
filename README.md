@@ -31,14 +31,17 @@ own implementation of `LLM` on `Transformer` architecture.
 
 - Structure of MatrixIO
 
-1) Saving to a file (.safetensors format), and retrieving the embedding matrix from the file.
+1) Saving to a file, and retrieving the embedding matrix from the file. Available formats are .safetensors and .npy.
+
+UPD: Important clarification.
+In this implementation, the embedding matrix has columns corresponding to tokens (each column is an embedding for one token).
 
 ### Installing
 
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-tictonix = "0.7.0"
+tictonix = "0.8.0"
 ```
 
 ### Usage
@@ -47,7 +50,7 @@ See [examples for usage](https://github.com/Ave-Sergeev/Tictonix/blob/main/examp
 
 ### Documentation
 
-See [documentation](https://docs.rs/tictonix/0.7.0/tictonix/) for the project.
+See [documentation](https://docs.rs/tictonix/0.8.0/tictonix/) for the project.
 
 ### Glossary
 
@@ -72,4 +75,4 @@ See [documentation](https://docs.rs/tictonix/0.7.0/tictonix/) for the project.
 
 ### P.S.
 
-Don't forget to leave a ⭐ if you found this project useful.
+Don't forget to leave a ⭐ if you found [this project](https://github.com/Ave-Sergeev/Tictonix) useful.
