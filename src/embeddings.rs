@@ -1,8 +1,12 @@
 use crate::error::EmbeddingError;
 use anyhow::{Error, Result};
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, Axis};
+use rand::RngCore;
+use rand::SeedableRng;
 use rand::distr::{Distribution, Uniform};
+use rand::rngs::SmallRng;
 use rand_distr::Normal;
+use rayon::prelude::*;
 
 pub struct Embeddings {
     matrix: Array2<f32>,
@@ -11,6 +15,8 @@ pub struct Embeddings {
 }
 
 impl Embeddings {
+    const CHUNK_SIZE: usize = 4096;
+
     /// Initialization of a new embedding matrix (uniform distribution with random filling)
     ///
     /// # Parameters
@@ -24,6 +30,7 @@ impl Embeddings {
     /// # Errors
     /// - `InvalidInput`: Occurs if the input parameters are invalid.
     /// - `UniformCreationFailed`: Occurs if the uniform distribution cannot be created within the specified range `[-1.0, 1.0]`.
+    /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
         if vocab_size == 0 || embedding_dim == 0 {
             return Err(Error::from(EmbeddingError::InvalidInput(
@@ -31,10 +38,13 @@ impl Embeddings {
             )));
         }
 
-        let mut rng = rand::rng();
         let uniform =
             Uniform::new_inclusive(-1.0, 1.0).map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
-        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| uniform.sample(&mut rng));
+
+        let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, uniform);
+
+        let matrix = Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
+            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))?;
 
         Ok(Self {
             matrix,
@@ -58,6 +68,7 @@ impl Embeddings {
     /// # Errors
     /// - `InvalidInput`: Occurs if the input parameters are invalid.
     /// - `NormalCreationFailed`: Occurs if the normal (Gaussian) distribution cannot be created with the specified mean and standard deviation.
+    /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_gaussian(vocab_size: usize, embedding_dim: usize, mean: f32, std_dev: f32) -> Result<Self, Error> {
         if vocab_size == 0 || embedding_dim == 0 {
             return Err(Error::from(EmbeddingError::InvalidInput(
@@ -71,9 +82,12 @@ impl Embeddings {
             )));
         }
 
-        let mut rng = rand::rng();
         let normal = Normal::new(mean, std_dev).map_err(|err| EmbeddingError::NormalCreationFailed(err.to_string()))?;
-        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| normal.sample(&mut rng));
+
+        let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, normal);
+
+        let matrix = Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
+            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))?;
 
         Ok(Self {
             matrix,
@@ -94,6 +108,7 @@ impl Embeddings {
     ///
     /// # Errors
     /// - `InvalidInput`: Occurs if the input parameters are invalid.
+    /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
         if vocab_size == 0 || embedding_dim == 0 {
             return Err(Error::from(EmbeddingError::InvalidInput(
@@ -101,26 +116,21 @@ impl Embeddings {
             )));
         }
 
-        let mut rng = rand::rng();
         let std_dev = (6.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
 
         let uniform = Uniform::new_inclusive(-std_dev, std_dev)
-            .map_err(|e| EmbeddingError::UniformCreationFailed(e.to_string()))?;
-        let matrix = Array2::from_shape_fn((embedding_dim, vocab_size), |_| uniform.sample(&mut rng));
+            .map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
+
+        let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, uniform);
+
+        let matrix = Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
+            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))?;
 
         Ok(Self {
             matrix,
             vocab_size,
             embedding_dim,
         })
-    }
-
-    /// Getter for embedding matrix
-    ///
-    /// # Returns
-    /// A reference to the `Array2<f32>` matrix containing the embeddings.
-    pub fn getter_matrix(&self) -> &Array2<f32> {
-        &self.matrix
     }
 
     /// Construction of the resulting embedding matrix for an array of tokens (indices) from the original embedding matrix
@@ -135,17 +145,11 @@ impl Embeddings {
     /// # Errors
     /// - `OutOfVocabularyError`: Occurs if any token index in the `tokens` array is out of bounds for the vocabulary.
     pub fn get_embeddings(&self, tokens: &[usize]) -> Result<Array2<f32>, Error> {
-        let mut embeddings = Array2::zeros((self.embedding_dim, tokens.len()));
-
-        for (i, &token) in tokens.iter().enumerate() {
-            if token >= self.vocab_size {
-                return Err(Error::from(EmbeddingError::OutOfVocabularyError));
-            }
-
-            embeddings.column_mut(i).assign(&self.matrix.column(token));
+        if tokens.iter().any(|&token| token >= self.vocab_size) {
+            return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
-        Ok(embeddings)
+        Ok(self.matrix.select(Axis(1), tokens).to_owned())
     }
 
     /// Obtaining an embedding for a specific token (index) from the initial matrix of embeddings
@@ -193,6 +197,37 @@ impl Embeddings {
 
         Ok(())
     }
+
+    /// Getter for embedding matrix
+    ///
+    /// # Returns
+    /// A reference to the `Array2<f32>` matrix containing the embeddings.
+    pub fn getter_matrix(&self) -> &Array2<f32> {
+        &self.matrix
+    }
+
+    fn generate_random_values<D>(vocab_size: &usize, embedding_dim: &usize, distribution: D) -> Vec<f32>
+    where
+        D: Distribution<f32> + Send + Sync,
+    {
+        let total_elements = vocab_size * embedding_dim;
+
+        (0..total_elements)
+            .into_par_iter()
+            .chunks(Self::CHUNK_SIZE)
+            .flat_map(|chunk| {
+                let mut local_rng = SmallRng::seed_from_u64(rand::rng().next_u64());
+
+                let mut block_values = Vec::with_capacity(chunk.len());
+
+                for _ in chunk {
+                    block_values.push(distribution.sample(&mut local_rng));
+                }
+
+                block_values
+            })
+            .collect::<Vec<_>>()
+    }
 }
 
 #[cfg(test)]
@@ -218,8 +253,8 @@ mod tests {
 
     #[test]
     fn test_embeddings_new_gaussian() {
-        let mean = 0.0f32;
-        let std_dev = 0.01f32;
+        let mean = 0.0;
+        let std_dev = 0.01;
         let vocab_size = 10;
         let embedding_dim = 5;
 

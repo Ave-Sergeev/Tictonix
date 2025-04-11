@@ -41,7 +41,7 @@ In this implementation, the embedding matrix has columns corresponding to tokens
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-tictonix = "0.8.0"
+tictonix = "0.9.0"
 ```
 
 ### Usage
@@ -50,7 +50,7 @@ See [examples for usage](https://github.com/Ave-Sergeev/Tictonix/blob/main/examp
 
 ### Documentation
 
-See [documentation](https://docs.rs/tictonix/0.8.0/tictonix/) for the project.
+See [documentation](https://docs.rs/tictonix/0.9.0/tictonix/) for the project.
 
 ### Glossary
 

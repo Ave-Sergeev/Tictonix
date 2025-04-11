@@ -56,4 +56,6 @@ pub enum EmbeddingError {
     OutOfVocabularyError,
     #[error("Embedding size mismatch error")]
     DimensionMismatchError,
+    #[error("Creation failed: {0}")]
+    MatrixCreationFailed(String),
 }
