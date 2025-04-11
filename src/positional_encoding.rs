@@ -22,7 +22,7 @@ impl PositionalEncoding {
 
         for pos in 0..max_seq_len {
             for i in 0..embedding_dim {
-                let angle = pos as f32 / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
+                let angle = pos as f32 / 10000.0_f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
 
                 encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
             }
@@ -49,7 +49,7 @@ impl PositionalEncoding {
         for pos in 0..max_seq_len {
             for i in 0..embedding_dim {
                 let relative_pos = pos as f32 - (max_seq_len / 2) as f32;
-                let angle = relative_pos / 10000.0f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
+                let angle = relative_pos / 10000.0_f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
 
                 encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
             }
@@ -113,7 +113,7 @@ impl PositionalEncoding {
         let mut output_matrix = input.clone();
 
         for pos in 0..seq_len {
-            for i in (0..self.embedding_dim).step_by(2) {
+            for i in (0..self.embedding_dim.saturating_sub(1)).step_by(2) {
                 let cos = encoding[[i, pos]];
                 let sin = encoding[[i + 1, pos]];
                 let xi = input[[i, pos]];
@@ -121,6 +121,11 @@ impl PositionalEncoding {
 
                 output_matrix[[i, pos]] = xi * cos - xi1 * sin;
                 output_matrix[[i + 1, pos]] = xi * sin + xi1 * cos;
+            }
+
+            if self.embedding_dim % 2 == 1 {
+                let i = self.embedding_dim - 1;
+                output_matrix[[i, pos]] = input[[i, pos]];
             }
         }
 
@@ -150,8 +155,7 @@ impl PositionalEncoding {
             return Err(Error::from(PositionalEncodingError::EmbeddingDimensionMismatch));
         }
 
-        let pe_slice = self.encoding.slice(s![.., ..seq_len]);
-        *embeddings += &pe_slice;
+        *embeddings += &self.encoding.slice(s![.., ..seq_len]);
 
         Ok(())
     }
@@ -172,9 +176,7 @@ impl PositionalEncoding {
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
-        let pe_slice = self.encoding.slice(s![.., ..seq_len]).to_owned();
-
-        Ok(pe_slice)
+        Ok(self.encoding.slice(s![.., ..seq_len]).to_owned())
     }
 
     /// Return the positional encoding (one-dimensional array) for a specific position in the sequence
@@ -205,10 +207,9 @@ impl PositionalEncoding {
     }
 
     fn get_theta(pos: usize, i: usize, dim: usize) -> f32 {
-        let base: f32 = 10000.0;
         let exponent: f32 = (2 * (i / 2)) as f32 / dim as f32;
 
-        pos as f32 / base.powf(exponent)
+        pos as f32 / 10000.0_f32.powf(exponent)
     }
 
     fn get_encoding(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
@@ -305,7 +306,7 @@ mod tests {
 
         let pos = 1;
         let i = 0;
-        let angle = pos as f32 / 10000.0f32.powf(i as f32 / embedding_dim as f32);
+        let angle = pos as f32 / 10000.0_f32.powf(i as f32 / embedding_dim as f32);
         let expected_i = angle.cos() - angle.sin();
         let expected_i1 = angle.cos() + angle.sin();
 

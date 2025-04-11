@@ -29,7 +29,9 @@ impl MatrixIO {
     pub fn save_to_safetensors(matrix: &Array2<f32>, file_path: &str) -> Result<(), Error> {
         let shape = matrix.shape().to_vec();
 
-        let data = matrix
+        let matrix_contiguous = matrix.as_standard_layout();
+
+        let data = matrix_contiguous
             .as_slice()
             .ok_or(IOError::SliceConversionFailed)?
             .iter()
@@ -39,7 +41,7 @@ impl MatrixIO {
         let tensor =
             TensorView::new(Dtype::F32, shape, &data).map_err(|err| IOError::TensorCreationFailed(err.to_string()))?;
 
-        let mut tensors_map = HashMap::new();
+        let mut tensors_map = HashMap::with_capacity(1);
         tensors_map.insert("matrix", tensor);
 
         serialize_to_file(tensors_map, &None, file_path.as_ref())
@@ -127,7 +129,10 @@ impl MatrixIO {
         writer.write_all(b"\n")?;
         writer.write_all(&vec![b' '; padding])?;
 
-        let data = matrix.as_slice().ok_or(IOError::InvalidFormat)?;
+        let matrix_contiguous = matrix.as_standard_layout();
+
+        let data = matrix_contiguous.as_slice().ok_or(IOError::InvalidFormat)?;
+
         for &value in data {
             writer.write_all(&value.to_le_bytes())?;
         }
@@ -157,10 +162,11 @@ impl MatrixIO {
     /// - `IOError`: File read failures (e.g., permission issues or premature EOF).
     /// - `HeaderParseError`: Failed to parse the header (e.g., invalid regex or structure).
     pub fn load_from_npy(file_path: &str) -> Result<Array2<f32>, Error> {
+        let mut magic = [0_u8; 6];
+        let mut version = [0_u8; 2];
+        let mut header_len_bytes = [0_u8; 2];
+
         let mut file = File::open(file_path)?;
-        let mut magic = [0u8; 6];
-        let mut version = [0u8; 2];
-        let mut header_len_bytes = [0u8; 2];
 
         file.read_exact(&mut magic)?;
 
@@ -175,9 +181,10 @@ impl MatrixIO {
         }
 
         file.read_exact(&mut header_len_bytes)?;
+
         let header_len = u16::from_le_bytes(header_len_bytes) as usize;
 
-        let mut header = vec![0u8; header_len];
+        let mut header = vec![0_u8; header_len];
         file.read_exact(&mut header)?;
         let header_str = String::from_utf8(header).map_err(|_| IOError::InvalidFormat)?;
 
@@ -187,10 +194,10 @@ impl MatrixIO {
         }
 
         let total_elements = shape.0 * shape.1;
-        let mut data = vec![0f32; total_elements];
+        let mut data = vec![0.0; total_elements];
 
         for item in data.iter_mut().take(total_elements) {
-            let mut bytes = [0u8; 4];
+            let mut bytes = [0_u8; 4];
 
             file.read_exact(&mut bytes)?;
             *item = f32::from_le_bytes(bytes);

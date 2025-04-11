@@ -1,11 +1,11 @@
 [package]
 name = "tictonix"
-version = "0.8.0"
+version = "0.9.0"
 repository = "https://github.com/Ave-Sergeev/Tictonix"
 description = "A library that provides the ability to convert tokens into embeddings, as well as to encode their positions"
 authors = ["Artem Sergeev"]
 keywords = ["embeddings", "positional-encoding"]
-categories = ["encoding", "mathematics"]
+categories = ["encoding", "mathematics", "science"]
 readme = "README.md"
 edition = "2024"
 license = "MIT"
@@ -20,6 +20,7 @@ include = [
 [dependencies]
 rand = "0.9.0"
 regex = "1.11.1"
+rayon = "1.10.0"
 approx = "0.5.1"
 anyhow = "1.0.97"
 ndarray = "0.16.1"

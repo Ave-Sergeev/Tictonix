@@ -3,11 +3,11 @@ use std::error::Error;
 fn main() -> Result<(), Box<dyn Error>> {
     let tokens = vec![1, 3, 5, 7, 9];
     let embedding_dimension = 4;
-    let std_dev = 0.01f32;
+    let std_dev = 0.01_f32;
     let max_seq_len = 10;
     let vocab_size = 10;
     let position = 3;
-    let mean = 0.0f32;
+    let mean = 0.0_f32;
 
     // ---------------------------------------------------------------------------------- //
 
@@ -87,17 +87,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Let's look at how token embeddings can be saved and loaded:
 
     // Let's save token embeddings with positional encodings (matrix) to a files .npy and .safetensors
-    tictonix::MatrixIO::save_to_safetensors(&token_embeddings, "./test.safetensors")?;
-    tictonix::MatrixIO::save_to_npy(&token_embeddings, "./test.npy")?;
+    tictonix::MatrixIO::save_to_safetensors(&token_embeddings, "./example/test.safetensors")?;
+    tictonix::MatrixIO::save_to_npy(&token_embeddings, "./example/test.npy")?;
     println!("Matrix saved to file:\n{:.6}\n", token_embeddings);
 
     // Let's get token embeddings with positional encodings (matrix) from the file .safetensors
-    let load_safetensors = tictonix::MatrixIO::load_from_safetensors("./test.safetensors")?;
+    let load_safetensors = tictonix::MatrixIO::load_from_safetensors("./example/test.safetensors")?;
     println!("Matrix obtained from file .safetensors:\n{:.6}\n", load_safetensors);
 
     // Let's get token embeddings with positional encodings (matrix) from the file .npy
-    let load_npy = tictonix::MatrixIO::load_from_npy("./test.npy")?;
+    let load_npy = tictonix::MatrixIO::load_from_npy("./example/test.npy")?;
     println!("Matrix obtained from file .npy:\n{:.6}\n", load_npy);
+
+    remove_file("./example/test.safetensors").expect("Failed to delete test file");
+    remove_file("./example/test.npy").expect("Failed to delete test file");
 
     // ---------------------------------------------------------------------------------- //
 

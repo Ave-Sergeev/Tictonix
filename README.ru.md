@@ -39,7 +39,7 @@ UPD: Важное уточнение.
 Добавьте в ваш `Cargo.toml`:
 ```toml
 [dependencies]
-tictonix = "0.8.0"
+tictonix = "0.9.0"
 ```
 
 ### Использование
@@ -48,7 +48,7 @@ tictonix = "0.8.0"
 
 ### Документация
 
-Смотреть [документацию](https://docs.rs/tictonix/0.8.0/tictonix/) на проект.
+Смотреть [документацию](https://docs.rs/tictonix/0.9.0/tictonix/) на проект.
 
 ### Глоссарий:
 
