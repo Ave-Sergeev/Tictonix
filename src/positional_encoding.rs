@@ -3,7 +3,7 @@ use anyhow::{Error, Result};
 use ndarray::{Array1, Array2, s};
 
 pub struct PositionalEncoding {
-    encoding: Array2<f32>,
+    encoding_matrix: Array2<f32>,
     max_seq_len: usize,
     embedding_dim: usize,
 }
@@ -18,18 +18,22 @@ impl PositionalEncoding {
     /// # Returns
     /// An instance of a structure with a matrix of sinusoidal embeddings.
     pub fn new_sinusoidal(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+        log::debug!(
+            "Creating new matrix of positional encodings (SPE) with max_seq_len: {max_seq_len}, embedding_dim: {embedding_dim}"
+        );
+
+        let mut encoding_matrix = Array2::zeros((embedding_dim, max_seq_len));
 
         for pos in 0..max_seq_len {
             for i in 0..embedding_dim {
                 let angle = pos as f32 / 10000.0_f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
 
-                encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
+                encoding_matrix[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
             }
         }
 
         Self {
-            encoding,
+            encoding_matrix,
             max_seq_len,
             embedding_dim,
         }
@@ -44,19 +48,23 @@ impl PositionalEncoding {
     /// # Returns
     /// An instance of a structure with a matrix of relative embeddings.
     pub fn new_relative(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+        log::debug!(
+            "Creating new matrix of positional encodings (RPE) with max_seq_len: {max_seq_len}, embedding_dim: {embedding_dim}"
+        );
+
+        let mut encoding_matrix = Array2::zeros((embedding_dim, max_seq_len));
 
         for pos in 0..max_seq_len {
             for i in 0..embedding_dim {
                 let relative_pos = pos as f32 - (max_seq_len / 2) as f32;
                 let angle = relative_pos / 10000.0_f32.powf((2 * (i / 2)) as f32 / embedding_dim as f32);
 
-                encoding[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
+                encoding_matrix[[i, pos]] = if i % 2 == 0 { angle.sin() } else { angle.cos() };
             }
         }
 
         Self {
-            encoding,
+            encoding_matrix,
             max_seq_len,
             embedding_dim,
         }
@@ -71,22 +79,26 @@ impl PositionalEncoding {
     /// # Returns
     /// A struct instance with an embedding matrix initialized using `RoPE`.
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
-        let mut encoding = Array2::zeros((embedding_dim, max_seq_len));
+        log::debug!(
+            "Creating new matrix of positional encodings (RoPE) with max_seq_len: {max_seq_len}, embedding_dim: {embedding_dim}"
+        );
+
+        let mut encoding_matrix = Array2::zeros((embedding_dim, max_seq_len));
 
         for pos in 0..max_seq_len {
             for i in (0..embedding_dim).step_by(2) {
                 let theta = Self::get_theta(pos, i, embedding_dim);
 
-                encoding[[i, pos]] = theta.cos();
+                encoding_matrix[[i, pos]] = theta.cos();
 
                 if i + 1 < embedding_dim {
-                    encoding[[i + 1, pos]] = theta.sin();
+                    encoding_matrix[[i + 1, pos]] = theta.sin();
                 }
             }
         }
 
         Self {
-            encoding,
+            encoding_matrix,
             max_seq_len,
             embedding_dim,
         }
@@ -105,11 +117,12 @@ impl PositionalEncoding {
     /// - `ShapeMismatch`: Occurs if the dimensions of the input matrix do not match the expected embedding dimension and maximum sequence length.
     pub fn apply_rope(&self, input: &Array2<f32>) -> Result<Array2<f32>, Error> {
         if input.shape() != [self.embedding_dim, self.max_seq_len] {
+            log::error!("Shape mismatch: expected [{}, {}]", self.embedding_dim, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::ShapeMismatch));
         }
 
         let seq_len = input.shape()[1];
-        let encoding = self.get_encoding(seq_len)?;
+        let encoding = self.get_slice_encoding(seq_len)?;
         let mut output_matrix = input.clone();
 
         for pos in 0..seq_len {
@@ -148,14 +161,16 @@ impl PositionalEncoding {
         let seq_len = embeddings.shape()[1];
 
         if seq_len > self.max_seq_len {
+            log::error!("Sequence length {} exceeds maximum allowed length {}", seq_len, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
         if embeddings.shape()[0] != self.embedding_dim {
+            log::error!("Embedding dimension mismatch: expected {}", self.embedding_dim);
             return Err(Error::from(PositionalEncodingError::EmbeddingDimensionMismatch));
         }
 
-        *embeddings += &self.encoding.slice(s![.., ..seq_len]);
+        *embeddings += &self.encoding_matrix.slice(s![.., ..seq_len]);
 
         Ok(())
     }
@@ -173,10 +188,11 @@ impl PositionalEncoding {
     /// - `SequenceLengthExceeded`: Occurs if the requested sequence length exceeds the maximum sequence length supported by the positional encoding.
     pub fn get_positional_encoding_slice(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
         if seq_len > self.max_seq_len {
+            log::error!("Sequence length {} exceeds maximum allowed length {}", seq_len, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
-        Ok(self.encoding.slice(s![.., ..seq_len]).to_owned())
+        Ok(self.encoding_matrix.slice(s![.., ..seq_len]).to_owned())
     }
 
     /// Return the positional encoding (one-dimensional array) for a specific position in the sequence
@@ -192,18 +208,19 @@ impl PositionalEncoding {
     /// - `PositionOutOfBounds`: Occurs if the requested position exceeds the maximum sequence length supported by the positional encoding.
     pub fn get_positional_encoding(&self, position: usize) -> Result<Array1<f32>, Error> {
         if position >= self.max_seq_len {
+            log::error!("Position {} is out of bounds. Maximum sequence length is {}", position, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::PositionOutOfBounds));
         }
 
-        Ok(self.encoding.column(position).to_owned())
+        Ok(self.encoding_matrix.column(position).to_owned())
     }
 
     /// Getter for positional encoding matrix
     ///
     /// # Returns
     /// A reference to the `Array2<f32>` matrix containing the positional encoding.
-    pub fn getter_encoding(&self) -> &Array2<f32> {
-        &self.encoding
+    pub fn encoding_matrix(&self) -> &Array2<f32> {
+        &self.encoding_matrix
     }
 
     fn get_theta(pos: usize, i: usize, dim: usize) -> f32 {
@@ -212,12 +229,13 @@ impl PositionalEncoding {
         pos as f32 / 10000.0_f32.powf(exponent)
     }
 
-    fn get_encoding(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
+    fn get_slice_encoding(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
         if seq_len > self.max_seq_len {
+            log::error!("Sequence length {} exceeds maximum allowed length {}", seq_len, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
-        Ok(self.encoding.slice(s![.., ..seq_len]).to_owned())
+        Ok(self.encoding_matrix.slice(s![.., ..seq_len]).to_owned())
     }
 }
 
@@ -228,55 +246,55 @@ mod tests {
     use ndarray::Array2;
 
     #[test]
-    fn test_positional_encoding_new_sinusoidal() {
+    fn test_new_sinusoidal() {
         let max_seq_len = 10;
         let embedding_dim = 6;
 
         let pe_sinusoidal = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
-        assert_eq!(pe_sinusoidal.encoding.shape(), &[embedding_dim, max_seq_len]);
+        assert_eq!(pe_sinusoidal.encoding_matrix.shape(), &[embedding_dim, max_seq_len]);
         assert_eq!(pe_sinusoidal.max_seq_len, max_seq_len);
         assert_eq!(pe_sinusoidal.embedding_dim, embedding_dim);
 
-        assert_abs_diff_eq!(pe_sinusoidal.encoding[[0, 0]], 0.0, epsilon = 1e-6);
-        assert_abs_diff_eq!(pe_sinusoidal.encoding[[0, 1]], f32::sin(1.0), epsilon = 1e-6);
-        assert_abs_diff_eq!(pe_sinusoidal.encoding[[1, 0]], 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_sinusoidal.encoding_matrix[[0, 0]], 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_sinusoidal.encoding_matrix[[0, 1]], f32::sin(1.0), epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_sinusoidal.encoding_matrix[[1, 0]], 1.0, epsilon = 1e-6);
     }
 
     #[test]
-    fn test_positional_encoding_new_relative() {
+    fn test_new_relative() {
         let max_seq_len = 10;
         let embedding_dim = 6;
         let center = 5;
 
         let pe_relative = PositionalEncoding::new_relative(max_seq_len, embedding_dim);
 
-        assert_eq!(pe_relative.encoding.shape(), &[embedding_dim, max_seq_len]);
+        assert_eq!(pe_relative.encoding_matrix.shape(), &[embedding_dim, max_seq_len]);
         assert_eq!(pe_relative.max_seq_len, max_seq_len);
         assert_eq!(pe_relative.embedding_dim, embedding_dim);
 
-        assert_abs_diff_eq!(pe_relative.encoding[[0, center]], 0.0, epsilon = 1e-6);
-        assert_abs_diff_eq!(pe_relative.encoding[[1, center]], 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_relative.encoding_matrix[[0, center]], 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(pe_relative.encoding_matrix[[1, center]], 1.0, epsilon = 1e-6);
     }
 
     #[test]
-    fn test_positional_encoding_new_rope() {
+    fn test_new_rope() {
         let max_seq_len = 10;
         let embedding_dim = 6;
 
         let pe_rope = PositionalEncoding::new_rope(max_seq_len, embedding_dim);
 
-        assert_eq!(pe_rope.encoding.shape(), &[embedding_dim, max_seq_len]);
+        assert_eq!(pe_rope.encoding_matrix.shape(), &[embedding_dim, max_seq_len]);
         assert_eq!(pe_rope.max_seq_len, max_seq_len);
         assert_eq!(pe_rope.embedding_dim, embedding_dim);
 
-        assert!(pe_rope.encoding[[0, 0]].abs() <= 1.0);
-        assert!(pe_rope.encoding[[1, 0]].abs() <= 1.0);
-        assert_ne!(pe_rope.encoding[[0, 0]], pe_rope.encoding[[1, 0]]);
+        assert!(pe_rope.encoding_matrix[[0, 0]].abs() <= 1.0);
+        assert!(pe_rope.encoding_matrix[[1, 0]].abs() <= 1.0);
+        assert_ne!(pe_rope.encoding_matrix[[0, 0]], pe_rope.encoding_matrix[[1, 0]]);
     }
 
     #[test]
-    fn test_positional_encoding_apply_rope() {
+    fn test_apply_rope() {
         let max_seq_len = 10;
         let embedding_dim = 6;
 
@@ -302,6 +320,7 @@ mod tests {
 
         let pos0_input = input.column(0).to_owned();
         let pos0_output = output.column(0).to_owned();
+
         assert_eq!(pos0_input, pos0_output);
 
         let pos = 1;
@@ -334,13 +353,13 @@ mod tests {
 
         let result = positional_encoding.add_to_embeddings(&mut embeddings);
 
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "Failed to add embeddings");
 
         for i in 0..embedding_dim {
             for j in 0..seq_len {
                 assert_abs_diff_eq!(
                     embeddings[[i, j]],
-                    original_embeddings[[i, j]] + positional_encoding.encoding[[i, j]],
+                    original_embeddings[[i, j]] + positional_encoding.encoding_matrix[[i, j]],
                     epsilon = 1e-6
                 );
             }
@@ -349,16 +368,16 @@ mod tests {
 
     #[test]
     fn test_add_to_embeddings_sequence_too_long() {
-        let seq_len = 10;
+        let wrong_seq_len = 10;
         let max_seq_len = 5;
         let embedding_dim = 4;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
-        let mut embeddings = Array2::zeros((embedding_dim, seq_len));
+        let mut embeddings = Array2::zeros((embedding_dim, wrong_seq_len));
 
         let result = positional_encoding.add_to_embeddings(&mut embeddings);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for sequence length exceeded, but got Ok");
     }
 
     #[test]
@@ -373,20 +392,20 @@ mod tests {
 
         let result = positional_encoding.add_to_embeddings(&mut embeddings);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for embedding dimension mismatch, but got Ok");
     }
 
     #[test]
-    fn test_getter_encoding() {
+    fn test_encoding_matrix() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(vocab_size, embedding_dim);
 
-        let matrix = positional_encoding.getter_encoding();
+        let matrix = positional_encoding.encoding_matrix();
 
         assert_eq!(matrix.shape(), &[embedding_dim, vocab_size]);
-        assert_eq!(*matrix, positional_encoding.encoding);
+        assert_eq!(*matrix, positional_encoding.encoding_matrix);
     }
 
     #[test]
@@ -399,29 +418,30 @@ mod tests {
 
         let result = positional_encoding.get_positional_encoding_slice(seq_len);
 
-        assert!(result.is_ok());
-        let pe_subset = result.unwrap();
+        assert!(result.is_ok(), "Failed to retrieve PE slice for sequence length {}", seq_len);
+
+        let pe_subset = result.expect("Failed to get subset");
 
         assert_eq!(pe_subset.shape(), &[embedding_dim, seq_len]);
 
         for i in 0..embedding_dim {
             for j in 0..seq_len {
-                assert_abs_diff_eq!(pe_subset[[i, j]], positional_encoding.encoding[[i, j]], epsilon = 1e-6);
+                assert_abs_diff_eq!(pe_subset[[i, j]], positional_encoding.encoding_matrix[[i, j]], epsilon = 1e-6);
             }
         }
     }
 
     #[test]
     fn test_get_positional_encoding_slice_too_long() {
-        let seq_len = 10;
+        let wrong_seq_len = 10;
         let max_seq_len = 5;
         let embedding_dim = 4;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
-        let result = positional_encoding.get_positional_encoding_slice(seq_len);
+        let result = positional_encoding.get_positional_encoding_slice(wrong_seq_len);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for sequence length exceeded, but got Ok");
     }
 
     #[test]
@@ -434,23 +454,24 @@ mod tests {
 
         let result = positional_encoding.get_positional_encoding(position);
 
-        assert!(result.is_ok());
-        let pe_subset = result.unwrap();
+        assert!(result.is_ok(), "Failed to get positional encoding");
+
+        let pe_subset = result.expect("Failed to get subset");
 
         assert_eq!(pe_subset.shape(), &[embedding_dim]);
-        assert_eq!(pe_subset[0], positional_encoding.encoding[[0, position]]);
+        assert_eq!(pe_subset[0], positional_encoding.encoding_matrix[[0, position]]);
     }
 
     #[test]
     fn test_get_positional_encoding_out_of_bounds() {
-        let position = 10;
+        let wrong_position = 10;
         let max_seq_len = 5;
         let embedding_dim = 4;
 
         let positional_encoding = PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dim);
 
-        let result = positional_encoding.get_positional_encoding(position);
+        let result = positional_encoding.get_positional_encoding(wrong_position);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for out of bounds, but got OK");
     }
 }

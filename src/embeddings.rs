@@ -9,7 +9,7 @@ use rand_distr::Normal;
 use rayon::prelude::*;
 
 pub struct Embeddings {
-    matrix: Array2<f32>,
+    embedding_matrix: Array2<f32>,
     vocab_size: usize,
     embedding_dim: usize,
 }
@@ -32,22 +32,26 @@ impl Embeddings {
     /// - `UniformCreationFailed`: Occurs if the uniform distribution cannot be created within the specified range `[-1.0, 1.0]`.
     /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
+        log::debug!("Creating new embedding (uniform) with vocab_size: {vocab_size}, embedding_dim: {embedding_dim}");
+
         if vocab_size == 0 || embedding_dim == 0 {
+            log::error!("Invalid input parameters: vocab_size = {vocab_size}, embedding_dim = {embedding_dim}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
             )));
         }
 
-        let uniform =
-            Uniform::new_inclusive(-1.0, 1.0).map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
+        let uniform = Uniform::new_inclusive(-1.0, 1.0).map_err(|err| {
+            log::error!("Failed to create uniform distribution: {err}");
+            EmbeddingError::UniformCreationFailed(err.to_string())
+        })?;
 
         let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, uniform);
 
-        let matrix = Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
-            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))?;
+        let embedding_matrix = Self::create_embedding_matrix(embedding_dim, vocab_size, random_values)?;
 
         Ok(Self {
-            matrix,
+            embedding_matrix,
             vocab_size,
             embedding_dim,
         })
@@ -70,27 +74,33 @@ impl Embeddings {
     /// - `NormalCreationFailed`: Occurs if the normal (Gaussian) distribution cannot be created with the specified mean and standard deviation.
     /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_gaussian(vocab_size: usize, embedding_dim: usize, mean: f32, std_dev: f32) -> Result<Self, Error> {
+        log::debug!("Creating new embedding (gaussian) with vocab_size: {vocab_size}, embedding_dim: {embedding_dim}");
+
         if vocab_size == 0 || embedding_dim == 0 {
+            log::error!("Invalid input parameters: vocab_size = {vocab_size}, embedding_dim = {embedding_dim}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
             )));
         }
 
         if std_dev <= 0.0 {
+            log::error!("Invalid standard deviation value: {std_dev}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Standard deviation must be positive".to_string(),
             )));
         }
 
-        let normal = Normal::new(mean, std_dev).map_err(|err| EmbeddingError::NormalCreationFailed(err.to_string()))?;
+        let normal = Normal::new(mean, std_dev).map_err(|err| {
+            log::error!("Failed to create normal distribution: {err}");
+            EmbeddingError::NormalCreationFailed(err.to_string())
+        })?;
 
         let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, normal);
 
-        let matrix = Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
-            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))?;
+        let embedding_matrix = Self::create_embedding_matrix(embedding_dim, vocab_size, random_values)?;
 
         Ok(Self {
-            matrix,
+            embedding_matrix,
             vocab_size,
             embedding_dim,
         })
@@ -110,7 +120,10 @@ impl Embeddings {
     /// - `InvalidInput`: Occurs if the input parameters are invalid.
     /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
+        log::debug!("Creating new embedding (xavier) with vocab_size: {vocab_size}, embedding_dim: {embedding_dim}");
+
         if vocab_size == 0 || embedding_dim == 0 {
+            log::error!("Invalid input parameters: vocab_size = {vocab_size}, embedding_dim = {embedding_dim}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
             )));
@@ -118,16 +131,21 @@ impl Embeddings {
 
         let std_dev = (6.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
 
-        let uniform = Uniform::new_inclusive(-std_dev, std_dev)
-            .map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
+        let uniform = Uniform::new_inclusive(-std_dev, std_dev).map_err(|err| {
+            log::error!(
+                "Failed to create uniform distribution with range [{}, {}] due to: {err}",
+                -std_dev,
+                std_dev
+            );
+            EmbeddingError::UniformCreationFailed(err.to_string())
+        })?;
 
         let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, uniform);
 
-        let matrix = Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
-            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))?;
+        let embedding_matrix = Self::create_embedding_matrix(embedding_dim, vocab_size, random_values)?;
 
         Ok(Self {
-            matrix,
+            embedding_matrix,
             vocab_size,
             embedding_dim,
         })
@@ -146,10 +164,11 @@ impl Embeddings {
     /// - `OutOfVocabularyError`: Occurs if any token index in the `tokens` array is out of bounds for the vocabulary.
     pub fn get_embeddings(&self, tokens: &[usize]) -> Result<Array2<f32>, Error> {
         if tokens.iter().any(|&token| token >= self.vocab_size) {
+            log::error!("Token index is out of vocabulary bounds");
             return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
-        Ok(self.matrix.select(Axis(1), tokens).to_owned())
+        Ok(self.embedding_matrix.select(Axis(1), tokens).to_owned())
     }
 
     /// Obtaining an embedding for a specific token (index) from the initial matrix of embeddings
@@ -165,10 +184,11 @@ impl Embeddings {
     /// - `OutOfVocabularyError`: Raised if the token index is out of bounds of the dictionary.
     pub fn get_embedding(&self, token: usize) -> Result<Array1<f32>, Error> {
         if token >= self.vocab_size {
+            log::error!("Token index {token} is out of vocabulary bounds");
             return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
-        Ok(self.matrix.column(token).to_owned())
+        Ok(self.embedding_matrix.column(token).to_owned())
     }
 
     /// Updating the embedding for a specific token (index) in the embedding matrix
@@ -186,14 +206,20 @@ impl Embeddings {
     /// - `DimensionMismatchError`: Raised if the dimension of the new embedding does not match the expected embedding dimension.
     pub fn update_embedding(&mut self, index: usize, new_embedding: &Array1<f32>) -> Result<(), Error> {
         if index >= self.vocab_size {
+            log::error!("Token index is out of vocabulary bounds");
             return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
         if new_embedding.len() != self.embedding_dim {
+            log::error!(
+                "Dimension Mismatch: Expected embedding dimension {}, but got {}",
+                self.embedding_dim,
+                new_embedding.len()
+            );
             return Err(Error::from(EmbeddingError::DimensionMismatchError));
         }
 
-        self.matrix.column_mut(index).assign(new_embedding);
+        self.embedding_matrix.column_mut(index).assign(new_embedding);
 
         Ok(())
     }
@@ -202,8 +228,8 @@ impl Embeddings {
     ///
     /// # Returns
     /// A reference to the `Array2<f32>` matrix containing the embeddings.
-    pub fn getter_matrix(&self) -> &Array2<f32> {
-        &self.matrix
+    pub fn embedding_matrix(&self) -> &Array2<f32> {
+        &self.embedding_matrix
     }
 
     fn generate_random_values<D>(vocab_size: &usize, embedding_dim: &usize, distribution: D) -> Vec<f32>
@@ -228,6 +254,22 @@ impl Embeddings {
             })
             .collect::<Vec<_>>()
     }
+
+    fn create_embedding_matrix(
+        embedding_dim: usize,
+        vocab_size: usize,
+        random_values: Vec<f32>,
+    ) -> Result<Array2<f32>, EmbeddingError> {
+        Array2::from_shape_vec((embedding_dim, vocab_size), random_values).map_err(|err| {
+            log::error!(
+                "Failed to create embedding matrix with dimensions ({}, {}) due to: {}",
+                embedding_dim,
+                vocab_size,
+                err
+            );
+            EmbeddingError::MatrixCreationFailed(err.to_string())
+        })
+    }
 }
 
 #[cfg(test)]
@@ -236,52 +278,60 @@ mod tests {
     use ndarray::arr1;
 
     #[test]
-    fn test_embeddings_new_uniform() {
+    fn test_new_uniform() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings_uniform = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+        let embeddings_uniform =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
 
-        assert_eq!(embeddings_uniform.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings_uniform.embedding_matrix.shape(), &[embedding_dim, vocab_size]);
         assert_eq!(embeddings_uniform.vocab_size, vocab_size);
         assert_eq!(embeddings_uniform.embedding_dim, embedding_dim);
 
-        for &value in embeddings_uniform.matrix.iter() {
+        for &value in embeddings_uniform.embedding_matrix.iter() {
             assert!(value >= -1.0 && value <= 1.0);
         }
     }
 
     #[test]
-    fn test_embeddings_new_gaussian() {
+    fn test_new_gaussian() {
         let mean = 0.0;
         let std_dev = 0.01;
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings_gaussian = Embeddings::new_gaussian(vocab_size, embedding_dim, mean, std_dev).unwrap();
+        let embeddings_gaussian = Embeddings::new_gaussian(vocab_size, embedding_dim, mean, std_dev)
+            .expect("Failed to create new embedding matrix");
 
-        assert_eq!(embeddings_gaussian.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings_gaussian.embedding_matrix.shape(), &[embedding_dim, vocab_size]);
         assert_eq!(embeddings_gaussian.vocab_size, vocab_size);
         assert_eq!(embeddings_gaussian.embedding_dim, embedding_dim);
 
-        let sum = embeddings_gaussian.matrix.iter().sum::<f32>();
+        let sum = embeddings_gaussian.embedding_matrix.iter().sum::<f32>();
         let avg = sum / (vocab_size * embedding_dim) as f32;
 
-        assert!((avg - mean).abs() < 0.1);
+        assert!(
+            (avg - mean).abs() < 0.1,
+            "Average value of embeddings ({}) deviates too much from expected mean ({})",
+            avg,
+            mean
+        );
     }
 
     #[test]
-    fn test_embeddings_new_xavier() {
+    fn test_new_xavier() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings_xavier = Embeddings::new_xavier(vocab_size, embedding_dim).unwrap();
+        let embeddings_xavier =
+            Embeddings::new_xavier(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
 
-        assert_eq!(embeddings_xavier.matrix.shape(), &[embedding_dim, vocab_size]);
+        assert_eq!(embeddings_xavier.embedding_matrix.shape(), &[embedding_dim, vocab_size]);
         assert_eq!(embeddings_xavier.vocab_size, vocab_size);
         assert_eq!(embeddings_xavier.embedding_dim, embedding_dim);
 
-        for &value in embeddings_xavier.matrix.iter() {
+        for &value in embeddings_xavier.embedding_matrix.iter() {
             assert!(value >= -1.0 && value <= 1.0);
         }
     }
@@ -290,16 +340,18 @@ mod tests {
     fn test_get_embeddings() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let tokens = vec![0, 3, 7];
-        let result = embeddings.get_embeddings(&tokens).unwrap();
+
+        let embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
+        let result = embeddings
+            .get_embeddings(&tokens)
+            .expect("Failed to get embeddings for a specific tokens");
 
         assert_eq!(result.shape(), &[embedding_dim, tokens.len()]);
 
         for (i, &token) in tokens.iter().enumerate() {
-            let expected_embedding = embeddings.matrix.column(token);
+            let expected_embedding = embeddings.embedding_matrix.column(token);
             let actual_embedding = result.column(i);
 
             for (expected, actual) in expected_embedding.iter().zip(actual_embedding.iter()) {
@@ -312,24 +364,26 @@ mod tests {
     fn test_get_embeddings_out_of_bounds() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let tokens = vec![1, 5, 15];
+
+        let embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
         let result = embeddings.get_embeddings(&tokens);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for out of bounds, but got Ok");
     }
 
     #[test]
     fn test_get_embeddings_empty() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let tokens = vec![];
-        let result = embeddings.get_embeddings(&tokens).unwrap();
+
+        let embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
+        let result = embeddings
+            .get_embeddings(&tokens)
+            .expect("Failed to get embeddings for a specific tokens");
 
         assert_eq!(result.shape(), &[embedding_dim, 0]);
     }
@@ -338,16 +392,17 @@ mod tests {
     fn test_get_embedding() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let token = 0;
-        let result = embeddings.get_embedding(token).unwrap();
 
-        assert_eq!(result.shape(), &[embedding_dim]);
+        let embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
+        let actual_embedding = embeddings
+            .get_embedding(token)
+            .expect("Failed to get embedding for a specific token");
 
-        let expected_embedding = embeddings.matrix.column(token);
-        let actual_embedding = result;
+        assert_eq!(actual_embedding.shape(), &[embedding_dim]);
+
+        let expected_embedding = embeddings.embedding_matrix.column(token);
 
         assert_eq!(expected_embedding, actual_embedding);
     }
@@ -356,28 +411,33 @@ mod tests {
     fn test_get_embedding_out_of_bounds() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let token = 15;
+
+        let embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
         let result = embeddings.get_embedding(token);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for out of bounds, but got Ok");
     }
 
     #[test]
     fn test_update_embedding() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let mut embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let token = 0;
         let new_embedding = arr1(&[0.0101, 0.2189, -0.1, 0.54, -0.0001]);
 
-        embeddings.update_embedding(token, &new_embedding).unwrap();
+        let mut embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
 
-        let updated_embedding = embeddings.get_embedding(token).unwrap();
+        embeddings
+            .update_embedding(token, &new_embedding)
+            .expect("Failed to update embedding for a specific token");
+
+        let updated_embedding = embeddings
+            .get_embedding(token)
+            .expect("Failed to get embedding for a specific token");
+
         assert_eq!(updated_embedding, new_embedding);
     }
 
@@ -385,42 +445,42 @@ mod tests {
     fn test_update_embedding_out_of_bounds() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let mut embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let token = 15;
         let new_embedding = arr1(&[0.0101, 0.2189, -0.1, 0.54, -0.0001]);
 
+        let mut embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
+
         let result = embeddings.update_embedding(token, &new_embedding);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for out of bounds, but got Ok");
     }
 
     #[test]
     fn test_update_embedding_dimension_mismatch() {
         let vocab_size = 10;
         let embedding_dim = 5;
-
-        let mut embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
-
         let token = 5;
         let new_embedding = arr1(&[0.0101, 0.2189, 0.54]);
 
+        let mut embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
         let result = embeddings.update_embedding(token, &new_embedding);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for embedding dimension mismatch, but got Ok");
     }
 
     #[test]
-    fn test_getter_matrix() {
+    fn test_embedding_matrix() {
         let vocab_size = 10;
         let embedding_dim = 5;
 
-        let embeddings = Embeddings::new_uniform(vocab_size, embedding_dim).unwrap();
+        let embeddings =
+            Embeddings::new_uniform(vocab_size, embedding_dim).expect("Failed to create new embedding matrix");
 
-        let matrix = embeddings.getter_matrix();
+        let matrix = embeddings.embedding_matrix();
 
         assert_eq!(matrix.shape(), &[embedding_dim, vocab_size]);
-        assert_eq!(*matrix, embeddings.matrix);
+        assert_eq!(*matrix, embeddings.embedding_matrix);
     }
 }

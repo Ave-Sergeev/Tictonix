@@ -15,15 +15,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Initialize a new embedding matrix (Xavier (Glorot))
     let embeddings_xavier = tictonix::Embeddings::new_xavier(vocab_size, embedding_dimension)?;
-    println!("Initialized embedding matrix (Xavier):\n{:.6}\n", embeddings_xavier.getter_matrix());
+    println!("Initialized embedding matrix (Xavier):\n{:.6}\n", embeddings_xavier.embedding_matrix());
 
     // Initialize a new embedding matrix (Gaussian)
     let embeddings_gaussian = tictonix::Embeddings::new_gaussian(vocab_size, embedding_dimension, mean, std_dev)?;
-    println!("Initialized embedding matrix (Gaussian):\n{:.6}\n", embeddings_gaussian.getter_matrix());
+    println!("Initialized embedding matrix (Gaussian):\n{:.6}\n", embeddings_gaussian.embedding_matrix());
 
     // Initialize a new embedding matrix (Uniform)
     let mut embeddings_uniform = tictonix::Embeddings::new_uniform(vocab_size, embedding_dimension)?;
-    println!("Initialized embedding matrix (Uniform):\n{:.6}\n", embeddings_uniform.getter_matrix());
+    println!("Initialized embedding matrix (Uniform):\n{:.6}\n", embeddings_uniform.embedding_matrix());
 
     // ---------------------------------------------------------------------------------- //
 
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Let's update the embedding for a certain token (index) in the embedding matrix (let's take Uniform)
     let _ = embeddings_uniform.update_embedding(tokens[1], &specific_token_embedding)?;
-    let altered_matrix = embeddings_uniform.getter_matrix();
+    let altered_matrix = embeddings_uniform.embedding_matrix();
     println!("Altered embedding matrix (from Uniform):\n{:.6}\n", altered_matrix);
 
     // ---------------------------------------------------------------------------------- //
@@ -48,15 +48,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Obtaining the matrix of position encodings by method SPE (Sinusoidal Positional Encoding) method
     let positional_sinusoidal = tictonix::PositionalEncoding::new_sinusoidal(max_seq_len, embedding_dimension);
-    println!("Obtained matrix (by SPE method):\n{:.6}\n", positional_sinusoidal.getter_encoding());
+    println!("Obtained matrix (by SPE method):\n{:.6}\n", positional_sinusoidal.encoding_matrix());
 
     // Obtaining the matrix of position encodings by method RPE (Relative Positional Encoding)
     let positional_relative = tictonix::PositionalEncoding::new_relative(max_seq_len, embedding_dimension);
-    println!("Obtained matrix (by RPE method):\n{:.6}\n", positional_relative.getter_encoding());
+    println!("Obtained matrix (by RPE method):\n{:.6}\n", positional_relative.encoding_matrix());
 
     // Obtaining the matrix of position encodings by method RoPE (Rotary Positional Embedding)
     let positional_rope = tictonix::PositionalEncoding::new_rope(max_seq_len, embedding_dimension);
-    println!("Obtained matrix (by RoPE method):\n{:.6}\n", positional_rope.getter_encoding());
+    println!("Obtained matrix (by RoPE method):\n{:.6}\n", positional_rope.encoding_matrix());
 
     // Applying RoPE to an input matrix
     let input_matrix = Array2::ones((embedding_dimension, max_seq_len));

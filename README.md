@@ -17,31 +17,50 @@ own implementation of `LLM` on `Transformer` architecture.
 
 ### Provided functionality:
 
-- Structure of Embeddings
+#### Structure of Embeddings
 
-1) Creating a new embedding matrix by various methods such as: `Gaussian`, `Xavier`, `Uniform`.
-2) Constructing the resulting embedding matrix for an array of tokens (indices), and obtaining a specific embedding for a token (index).
-3) Updating (replacing) the embedding for a particular token (index).
+- Creating a new embedding matrix by various methods such as: `Gaussian`, `Xavier`, `Uniform`.
+- Constructing the resulting embedding matrix for an array of tokens (indices), and obtaining a specific embedding for a token (index).
+- Updating (replacing) the embedding for a particular token (index).
 
-- Structure of PositionalEncoding
+#### Structure of PositionalEncoding
 
-1) Creating a new positional encoding matrix by various methods such as: `Sinusoidal PE`, `Relative PE`, `Rotary PE`.
-2) Applying positional encodings to the embedding matrix.
-3) Returning a part of the positional encoding matrix for a sequence, and a particular positional encoding by its position.
+- Creating a new positional encoding matrix by various methods such as: `Sinusoidal PE`, `Relative PE`, `Rotary PE`.
+- Applying positional encodings to the embedding matrix.
+- Returning a part of the positional encoding matrix for a sequence, and a particular positional encoding by its position.
 
-- Structure of MatrixIO
+#### Structure of MatrixIO
 
-1) Saving to a file, and retrieving the embedding matrix from the file. Available formats are .safetensors and .npy.
+- Saving to a file, and retrieving the embedding matrix from the file. Available formats are .safetensors and .npy.
 
-UPD: Important clarification.
-In this implementation, the embedding matrix has columns corresponding to tokens (each column is an embedding for one token).
+**UPD: Important clarifications:**
+- In this implementation, the embedding matrix has columns corresponding to tokens (each column is an embedding for one token).
+- All calculations are performed exclusively on CPU (without GPU).
 
 ### Installing
 
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-tictonix = "0.9.0"
+tictonix = "1.0.0"
+```
+
+### Logging
+
+The project uses [crate log](https://github.com/rust-lang/log) which provides a logging facade.
+
+You can use any compatible implementation (e.g. `env_logger`, `fern`, `simple_logger`, `tracing`)
+To do this, just initialize the selected logger in your application before starting.
+
+Example of initialization with `env_logger`:
+```Rust
+fn main() {
+    Builder::new()
+        .filter_level(LevelFilter::Info)
+        .filter_module("tictonix", LevelFilter::Debug)
+        .init();
+    // Your code
+}
 ```
 
 ### Usage
@@ -50,7 +69,7 @@ See [examples for usage](https://github.com/Ave-Sergeev/Tictonix/blob/main/examp
 
 ### Documentation
 
-See [documentation](https://docs.rs/tictonix/0.9.0/tictonix/) for the project.
+See [documentation](https://docs.rs/tictonix/1.0.0/tictonix/) for the project.
 
 ### Glossary
 

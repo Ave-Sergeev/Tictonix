@@ -33,21 +33,28 @@ impl MatrixIO {
 
         let data = matrix_contiguous
             .as_slice()
-            .ok_or(IOError::SliceConversionFailed)?
+            .ok_or_else(|| {
+                log::error!("Could not convert matrix to slice");
+                IOError::SliceConversionFailed
+            })?
             .iter()
             .flat_map(|float| float.to_le_bytes())
             .collect::<Vec<_>>();
 
-        let tensor =
-            TensorView::new(Dtype::F32, shape, &data).map_err(|err| IOError::TensorCreationFailed(err.to_string()))?;
+        let tensor = TensorView::new(Dtype::F32, shape, &data).map_err(|err| {
+            log::error!("Tensor creation failed: {err}");
+            IOError::TensorCreationFailed(err.to_string())
+        })?;
 
         let mut tensors_map = HashMap::with_capacity(1);
         tensors_map.insert("matrix", tensor);
 
-        serialize_to_file(tensors_map, &None, file_path.as_ref())
-            .map_err(|err| IOError::SerializationFailed(err.to_string()))?;
+        serialize_to_file(tensors_map, &None, file_path.as_ref()).map_err(|err| {
+            log::error!("Serialization failed: {err}");
+            IOError::SerializationFailed(err.to_string())
+        })?;
 
-        println!("Matrix successfully saved to file: {file_path}\n");
+        log::info!("Matrix successfully saved to file: {file_path}");
 
         Ok(())
     }
@@ -72,18 +79,28 @@ impl MatrixIO {
         let mut buffer = Vec::new();
 
         File::open(file_path)
-            .map_err(|err| IOError::FileOpenError(err.to_string()))?
+            .map_err(|err| {
+                log::error!("File open error: {err}");
+                IOError::FileOpenError(err.to_string())
+            })?
             .read_to_end(&mut buffer)
-            .map_err(|err| IOError::FileReadError(err.to_string()))?;
+            .map_err(|err| {
+                log::error!("File read error: {err}");
+                IOError::FileReadError(err.to_string())
+            })?;
 
-        let safe_tensors =
-            SafeTensors::deserialize(&buffer).map_err(|err| IOError::DeserializationError(err.to_string()))?;
+        let safe_tensors = SafeTensors::deserialize(&buffer).map_err(|err| {
+            log::error!("Deserialize error: {err}");
+            IOError::DeserializationError(err.to_string())
+        })?;
 
-        let tensor = safe_tensors
-            .tensor("matrix")
-            .map_err(|err| IOError::TensorRetrievalError(err.to_string()))?;
+        let tensor = safe_tensors.tensor("matrix").map_err(|err| {
+            log::error!("Failed to retrieve tensor: {err}");
+            IOError::TensorRetrievalError(err.to_string())
+        })?;
 
         if tensor.dtype() != Dtype::F32 {
+            log::error!("Invalid data type: expected F32");
             return Err(Error::from(IOError::InvalidDataType));
         }
 
@@ -91,10 +108,12 @@ impl MatrixIO {
         let data_f32 = cast_slice(data_bytes);
         let shape = tensor.shape();
 
-        let matrix = Array2::from_shape_vec((shape[0], shape[1]), data_f32.to_vec())
-            .map_err(|err| IOError::DataConversionError(err.to_string()))?;
+        let matrix = Array2::from_shape_vec((shape[0], shape[1]), data_f32.to_vec()).map_err(|err| {
+            log::error!("Failed to convert data to embedding matrix");
+            IOError::DataConversionError(err.to_string())
+        })?;
 
-        println!("Matrix successfully loaded from file: {file_path}\n");
+        log::info!("Matrix successfully loaded from file: {file_path}");
 
         Ok(matrix)
     }
@@ -131,13 +150,16 @@ impl MatrixIO {
 
         let matrix_contiguous = matrix.as_standard_layout();
 
-        let data = matrix_contiguous.as_slice().ok_or(IOError::InvalidFormat)?;
+        let data = matrix_contiguous.as_slice().ok_or_else(|| {
+            log::error!("Error getting slice from contiguous matrix: Matrix is not contiguous or empty");
+            IOError::InvalidFormat
+        })?;
 
         for &value in data {
             writer.write_all(&value.to_le_bytes())?;
         }
 
-        println!("Matrix successfully saved to file: {file_path}\n");
+        log::info!("Matrix successfully saved to file: {file_path}\n");
 
         Ok(())
     }
@@ -171,12 +193,14 @@ impl MatrixIO {
         file.read_exact(&mut magic)?;
 
         if &magic != b"\x93NUMPY" {
+            log::error!("Invalid format");
             return Err(Error::from(IOError::InvalidFormat));
         }
 
         file.read_exact(&mut version)?;
 
         if version != [0x01, 0x00] {
+            log::error!("Unsupported version");
             return Err(Error::from(IOError::UnsupportedVersion));
         }
 
@@ -186,10 +210,14 @@ impl MatrixIO {
 
         let mut header = vec![0_u8; header_len];
         file.read_exact(&mut header)?;
-        let header_str = String::from_utf8(header).map_err(|_| IOError::InvalidFormat)?;
+        let header_str = String::from_utf8(header).map_err(|_| {
+            log::error!("Invalid format");
+            IOError::InvalidFormat
+        })?;
 
         let (shape, fortran_order) = Self::parse_header(&header_str)?;
         if fortran_order {
+            log::error!("Fortran order not supported");
             return Err(Error::from(IOError::FortranOrderNotSupported));
         }
 
@@ -203,24 +231,39 @@ impl MatrixIO {
             *item = f32::from_le_bytes(bytes);
         }
 
-        let matrix = Array2::from_shape_vec(shape, data).map_err(|_| IOError::ShapeMismatch)?;
+        let matrix = Array2::from_shape_vec(shape, data).map_err(|_| {
+            log::error!("Failed to create matrix: shape mismatch");
+            IOError::ShapeMismatch
+        })?;
 
-        println!("Matrix successfully loaded from file: {file_path}\n");
+        log::info!("Matrix successfully loaded from file: {file_path}");
 
         Ok(matrix)
     }
 
     fn parse_header(header: &str) -> Result<((usize, usize), bool), Error> {
-        let re = Regex::new(
+        let regex = Regex::new(
             r"'descr'\s*:\s*'<f4'\s*,\s*'fortran_order'\s*:\s*(True|False)\s*,\s*'shape'\s*:\s*\((\d+)\s*,\s*(\d+)\)",
         )
-        .map_err(|_| IOError::HeaderParseError)?;
+        .map_err(|_| {
+            log::error!("Failed to parse header");
+            IOError::HeaderParseError
+        })?;
 
-        let caps = re.captures(header).ok_or(IOError::InvalidFormat)?;
+        let caps = regex.captures(header).ok_or_else(|| {
+            log::error!("Invalid format");
+            IOError::InvalidFormat
+        })?;
 
         let fortran_order = &caps[1] == "True";
-        let dim1: usize = caps[2].parse().map_err(|_| IOError::InvalidFormat)?;
-        let dim2: usize = caps[3].parse().map_err(|_| IOError::InvalidFormat)?;
+        let dim1: usize = caps[2].parse().map_err(|_| {
+            log::error!("Failed to parse dimension");
+            IOError::InvalidFormat
+        })?;
+        let dim2: usize = caps[3].parse().map_err(|_| {
+            log::error!("Failed to parse dimension");
+            IOError::InvalidFormat
+        })?;
 
         Ok(((dim1, dim2), fortran_order))
     }
@@ -229,88 +272,172 @@ impl MatrixIO {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::fs::remove_file;
     use std::io::Write;
+    use std::path::Path;
 
     #[test]
-    fn test_save_and_load_safetensors() {
-        let file_path = "test_matrix.safetensors";
+    fn test_save_to_safetensors_success() {
+        let file_path = "test_matrix_save.safetensors";
 
-        let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let matrix = Array2::from_elem((2, 3), 1.0_f32);
+        let result = MatrixIO::save_to_safetensors(&matrix, file_path);
+
+        let metadata = fs::metadata(file_path).expect("Failed to get file information");
+
+        assert!(result.is_ok(), "Failed to save matrix to safetensors: {:?}", result);
+        assert!(Path::new(file_path).exists(), "File was not created at {}", file_path);
+        assert!(metadata.len() > 0, "File is empty");
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_save_to_safetensors_invalid_path() {
+        let invalid_path = "non_existent_directory/test_matrix_save.safetensors";
+
+        let matrix = Array2::from_elem((2, 3), 1.0_f32);
+        let result = MatrixIO::save_to_safetensors(&matrix, invalid_path);
+
+        assert!(result.is_err(), "Expected error for invalid path, but got Ok");
+    }
+
+    #[test]
+    fn test_save_to_safetensors_empty_matrix() {
+        let file_path = "test_matrix_save_empty.safetensors";
+
+        let matrix = Array2::from_elem((0, 0), 0.0_f32);
+        let result = MatrixIO::save_to_safetensors(&matrix, file_path);
+
+        assert!(result.is_ok(), "Failed to save empty matrix: {:?}", result);
+        assert!(Path::new(file_path).exists(), "File was not created at {}", file_path);
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_load_from_safetensors_success() {
+        let file_path = "test_matrix_load.safetensors";
+
+        let matrix = Array2::from_elem((2, 3), 1.0_f32);
 
         MatrixIO::save_to_safetensors(&matrix, file_path).expect("Failed to save matrix");
 
-        let loaded_matrix = MatrixIO::load_from_safetensors(file_path).expect("Failed to load matrix");
+        let result = MatrixIO::load_from_safetensors(file_path);
 
-        assert_eq!(matrix, loaded_matrix);
+        assert!(result.is_ok(), "Failed to load matrix from safetensors: {:?}", result);
 
-        remove_file(file_path).expect("Failed to delete test file");
-    }
+        let loaded_matrix = result.expect("Failed to load matrix");
 
-    #[test]
-    fn test_save_and_load_npy() {
-        let file_path = "test_matrix.npy";
-
-        let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
-
-        MatrixIO::save_to_npy(&matrix, file_path).expect("Failed to save matrix");
-
-        let loaded_matrix = MatrixIO::load_from_npy(file_path).expect("Failed to load matrix");
-
-        assert_eq!(matrix, loaded_matrix);
+        assert_eq!(loaded_matrix.shape(), matrix.shape(), "Matrix shapes do not match");
+        assert_eq!(loaded_matrix, matrix, "Matrix contents do not match");
 
         remove_file(file_path).expect("Failed to delete test file");
     }
 
     #[test]
-    fn test_load_invalid_file_from_safetensors() {
-        let file_path = "invalid_matrix.safetensors";
+    fn test_load_from_safetensors_file_not_found() {
+        let invalid_path = "non_existent_directory/test_matrix_load.safetensors";
+
+        let result = MatrixIO::load_from_safetensors(invalid_path);
+
+        assert!(result.is_err(), "Expected error for nonexistent file, but got Ok");
+    }
+
+    #[test]
+    fn test_load_from_safetensors_invalid_file() {
+        let file_path = "test_matrix_load_invalid.safetensors";
 
         let mut file = File::create(file_path).expect("Failed to create test file");
-
         file.write_all(b"invalid data").expect("Failed to write test data");
 
         let result = MatrixIO::load_from_safetensors(file_path);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for invalid data type, but got Ok");
 
         remove_file(file_path).expect("Failed to delete test file");
     }
 
     #[test]
-    fn test_load_invalid_file_from_npy() {
-        let file_path = "invalid_matrix.npy";
+    fn test_save_to_npy_success() {
+        let file_path = "test_matrix_save.npy";
+
+        let matrix = Array2::from_elem((2, 3), 1.0_f32);
+        let result = MatrixIO::save_to_npy(&matrix, file_path);
+
+        let metadata = fs::metadata(file_path).expect("Failed to get file information");
+
+        assert!(result.is_ok(), "Failed to save matrix to npy: {:?}", result);
+        assert!(Path::new(file_path).exists(), "File was not created at {}", file_path);
+        assert!(metadata.len() > 0, "File is empty");
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_save_to_npy_invalid_path() {
+        let invalid_path = "non_existent_directory/test_matrix_save.npy";
+
+        let matrix = Array2::from_elem((2, 3), 1.0_f32);
+        let result = MatrixIO::save_to_npy(&matrix, invalid_path);
+
+        assert!(result.is_err(), "Expected error for invalid path, but got Ok");
+    }
+
+    #[test]
+    fn test_save_to_npy_empty_matrix() {
+        let file_path = "test_matrix_save_empty.npy";
+
+        let matrix = Array2::from_elem((0, 0), 0.0_f32);
+        let result = MatrixIO::save_to_npy(&matrix, file_path);
+
+        assert!(result.is_ok(), "Failed to save empty matrix: {:?}", result);
+        assert!(Path::new(file_path).exists(), "File was not created at {}", file_path);
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_load_from_npy_success() {
+        let file_path = "test_matrix_load.npy";
+
+        let matrix = Array2::from_elem((2, 3), 1.0_f32);
+
+        MatrixIO::save_to_npy(&matrix, file_path).expect("Failed to save matrix");
+
+        let result = MatrixIO::load_from_npy(file_path);
+
+        assert!(result.is_ok(), "Failed to load matrix from npy: {:?}", result);
+
+        let loaded_matrix = result.expect("Failed to load matrix");
+
+        assert_eq!(loaded_matrix.shape(), matrix.shape(), "Matrix shapes do not match");
+        assert_eq!(loaded_matrix, matrix, "Matrix contents do not match");
+
+        remove_file(file_path).expect("Failed to delete test file");
+    }
+
+    #[test]
+    fn test_load_from_npy_file_not_found() {
+        let invalid_path = "non_existent_directory/test_matrix_load.npy";
+
+        let result = MatrixIO::load_from_npy(invalid_path);
+
+        assert!(result.is_err(), "Expected error for nonexistent file, but got Ok");
+    }
+
+    #[test]
+    fn test_load_from_npy_invalid_file() {
+        let file_path = "test_matrix_load_invalid.npy";
 
         let mut file = File::create(file_path).expect("Failed to create test file");
-
         file.write_all(b"invalid data").expect("Failed to write test data");
 
         let result = MatrixIO::load_from_npy(file_path);
 
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error for invalid data type, but got Ok");
 
         remove_file(file_path).expect("Failed to delete test file");
-    }
-
-    #[test]
-    fn test_save_invalid_path_for_safetensors() {
-        let file_path = "non_existent_directory/test_matrix.safetensors";
-
-        let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
-
-        let result = MatrixIO::save_to_safetensors(&matrix, file_path);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_save_invalid_path_for_npy() {
-        let file_path = "non_existent_directory/test_matrix.npy";
-
-        let matrix = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
-
-        let result = MatrixIO::save_to_npy(&matrix, file_path);
-
-        assert!(result.is_err());
     }
 }
