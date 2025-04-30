@@ -33,26 +33,19 @@ impl MatrixIO {
 
         let data = matrix_contiguous
             .as_slice()
-            .ok_or_else(|| {
-                log::error!("Could not convert matrix to slice");
-                IOError::SliceConversionFailed
-            })?
+            .ok_or(IOError::SliceConversionFailed)?
             .iter()
             .flat_map(|float| float.to_le_bytes())
             .collect::<Vec<_>>();
 
-        let tensor = TensorView::new(Dtype::F32, shape, &data).map_err(|err| {
-            log::error!("Tensor creation failed: {err}");
-            IOError::TensorCreationFailed(err.to_string())
-        })?;
+        let tensor =
+            TensorView::new(Dtype::F32, shape, &data).map_err(|err| IOError::TensorCreationFailed(err.to_string()))?;
 
         let mut tensors_map = HashMap::with_capacity(1);
         tensors_map.insert("matrix", tensor);
 
-        serialize_to_file(tensors_map, &None, file_path.as_ref()).map_err(|err| {
-            log::error!("Serialization failed: {err}");
-            IOError::SerializationFailed(err.to_string())
-        })?;
+        serialize_to_file(tensors_map, &None, file_path.as_ref())
+            .map_err(|err| IOError::SerializationFailed(err.to_string()))?;
 
         log::info!("Matrix successfully saved to file: {file_path}");
 
@@ -79,39 +72,27 @@ impl MatrixIO {
         let mut buffer = Vec::new();
 
         File::open(file_path)
-            .map_err(|err| {
-                log::error!("File open error: {err}");
-                IOError::FileOpenError(err.to_string())
-            })?
+            .map_err(|err| IOError::FileOpenError(err.to_string()))?
             .read_to_end(&mut buffer)
-            .map_err(|err| {
-                log::error!("File read error: {err}");
-                IOError::FileReadError(err.to_string())
-            })?;
+            .map_err(|err| IOError::FileReadError(err.to_string()))?;
 
-        let safe_tensors = SafeTensors::deserialize(&buffer).map_err(|err| {
-            log::error!("Deserialize error: {err}");
-            IOError::DeserializationError(err.to_string())
-        })?;
+        let safe_tensors =
+            SafeTensors::deserialize(&buffer).map_err(|err| IOError::DeserializationError(err.to_string()))?;
 
-        let tensor = safe_tensors.tensor("matrix").map_err(|err| {
-            log::error!("Failed to retrieve tensor: {err}");
-            IOError::TensorRetrievalError(err.to_string())
-        })?;
+        let tensor = safe_tensors
+            .tensor("matrix")
+            .map_err(|err| IOError::TensorRetrievalError(err.to_string()))?;
 
         if tensor.dtype() != Dtype::F32 {
-            log::error!("Invalid data type: expected F32");
             return Err(Error::from(IOError::InvalidDataType));
         }
 
         let data_bytes = tensor.data();
-        let data_f32 = cast_slice(data_bytes);
+        let data_f32 = cast_slice(data_bytes).to_vec();
         let shape = tensor.shape();
 
-        let matrix = Array2::from_shape_vec((shape[0], shape[1]), data_f32.to_vec()).map_err(|err| {
-            log::error!("Failed to convert data to embedding matrix");
-            IOError::DataConversionError(err.to_string())
-        })?;
+        let matrix = Array2::from_shape_vec((shape[0], shape[1]), data_f32)
+            .map_err(|err| IOError::DataConversionError(err.to_string()))?;
 
         log::info!("Matrix successfully loaded from file: {file_path}");
 
@@ -150,16 +131,13 @@ impl MatrixIO {
 
         let matrix_contiguous = matrix.as_standard_layout();
 
-        let data = matrix_contiguous.as_slice().ok_or_else(|| {
-            log::error!("Error getting slice from contiguous matrix: Matrix is not contiguous or empty");
-            IOError::InvalidFormat
-        })?;
+        let data = matrix_contiguous.as_slice().ok_or(IOError::InvalidFormat)?;
 
         for &value in data {
             writer.write_all(&value.to_le_bytes())?;
         }
 
-        log::info!("Matrix successfully saved to file: {file_path}\n");
+        log::info!("Matrix successfully saved to file: {file_path}");
 
         Ok(())
     }
@@ -193,14 +171,12 @@ impl MatrixIO {
         file.read_exact(&mut magic)?;
 
         if &magic != b"\x93NUMPY" {
-            log::error!("Invalid format");
             return Err(Error::from(IOError::InvalidFormat));
         }
 
         file.read_exact(&mut version)?;
 
         if version != [0x01, 0x00] {
-            log::error!("Unsupported version");
             return Err(Error::from(IOError::UnsupportedVersion));
         }
 
@@ -210,14 +186,10 @@ impl MatrixIO {
 
         let mut header = vec![0_u8; header_len];
         file.read_exact(&mut header)?;
-        let header_str = String::from_utf8(header).map_err(|_| {
-            log::error!("Invalid format");
-            IOError::InvalidFormat
-        })?;
+        let header_str = String::from_utf8(header).map_err(|_| IOError::InvalidFormat)?;
 
         let (shape, fortran_order) = Self::parse_header(&header_str)?;
         if fortran_order {
-            log::error!("Fortran order not supported");
             return Err(Error::from(IOError::FortranOrderNotSupported));
         }
 
@@ -231,10 +203,7 @@ impl MatrixIO {
             *item = f32::from_le_bytes(bytes);
         }
 
-        let matrix = Array2::from_shape_vec(shape, data).map_err(|_| {
-            log::error!("Failed to create matrix: shape mismatch");
-            IOError::ShapeMismatch
-        })?;
+        let matrix = Array2::from_shape_vec(shape, data).map_err(|_| IOError::ShapeMismatch)?;
 
         log::info!("Matrix successfully loaded from file: {file_path}");
 
@@ -245,25 +214,13 @@ impl MatrixIO {
         let regex = Regex::new(
             r"'descr'\s*:\s*'<f4'\s*,\s*'fortran_order'\s*:\s*(True|False)\s*,\s*'shape'\s*:\s*\((\d+)\s*,\s*(\d+)\)",
         )
-        .map_err(|_| {
-            log::error!("Failed to parse header");
-            IOError::HeaderParseError
-        })?;
+        .map_err(|_| IOError::HeaderParseError)?;
 
-        let caps = regex.captures(header).ok_or_else(|| {
-            log::error!("Invalid format");
-            IOError::InvalidFormat
-        })?;
+        let caps = regex.captures(header).ok_or(IOError::InvalidFormat)?;
 
         let fortran_order = &caps[1] == "True";
-        let dim1: usize = caps[2].parse().map_err(|_| {
-            log::error!("Failed to parse dimension");
-            IOError::InvalidFormat
-        })?;
-        let dim2: usize = caps[3].parse().map_err(|_| {
-            log::error!("Failed to parse dimension");
-            IOError::InvalidFormat
-        })?;
+        let dim1: usize = caps[2].parse().map_err(|_| IOError::InvalidFormat)?;
+        let dim2: usize = caps[3].parse().map_err(|_| IOError::InvalidFormat)?;
 
         Ok(((dim1, dim2), fortran_order))
     }

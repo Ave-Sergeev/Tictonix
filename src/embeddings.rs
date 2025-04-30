@@ -32,19 +32,14 @@ impl Embeddings {
     /// - `UniformCreationFailed`: Occurs if the uniform distribution cannot be created within the specified range `[-1.0, 1.0]`.
     /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_uniform(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
-        log::debug!("Creating new embedding (uniform) with vocab_size: {vocab_size}, embedding_dim: {embedding_dim}");
-
         if vocab_size == 0 || embedding_dim == 0 {
-            log::error!("Invalid input parameters: vocab_size = {vocab_size}, embedding_dim = {embedding_dim}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
             )));
         }
 
-        let uniform = Uniform::new_inclusive(-1.0, 1.0).map_err(|err| {
-            log::error!("Failed to create uniform distribution: {err}");
-            EmbeddingError::UniformCreationFailed(err.to_string())
-        })?;
+        let uniform =
+            Uniform::new_inclusive(-1.0, 1.0).map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
 
         let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, uniform);
 
@@ -74,26 +69,19 @@ impl Embeddings {
     /// - `NormalCreationFailed`: Occurs if the normal (Gaussian) distribution cannot be created with the specified mean and standard deviation.
     /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_gaussian(vocab_size: usize, embedding_dim: usize, mean: f32, std_dev: f32) -> Result<Self, Error> {
-        log::debug!("Creating new embedding (gaussian) with vocab_size: {vocab_size}, embedding_dim: {embedding_dim}");
-
         if vocab_size == 0 || embedding_dim == 0 {
-            log::error!("Invalid input parameters: vocab_size = {vocab_size}, embedding_dim = {embedding_dim}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
             )));
         }
 
         if std_dev <= 0.0 {
-            log::error!("Invalid standard deviation value: {std_dev}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Standard deviation must be positive".to_string(),
             )));
         }
 
-        let normal = Normal::new(mean, std_dev).map_err(|err| {
-            log::error!("Failed to create normal distribution: {err}");
-            EmbeddingError::NormalCreationFailed(err.to_string())
-        })?;
+        let normal = Normal::new(mean, std_dev).map_err(|err| EmbeddingError::NormalCreationFailed(err.to_string()))?;
 
         let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, normal);
 
@@ -120,10 +108,7 @@ impl Embeddings {
     /// - `InvalidInput`: Occurs if the input parameters are invalid.
     /// - `MatrixCreationFailed`: Occurs if the embedding matrix cannot be reshaped.
     pub fn new_xavier(vocab_size: usize, embedding_dim: usize) -> Result<Self, Error> {
-        log::debug!("Creating new embedding (xavier) with vocab_size: {vocab_size}, embedding_dim: {embedding_dim}");
-
         if vocab_size == 0 || embedding_dim == 0 {
-            log::error!("Invalid input parameters: vocab_size = {vocab_size}, embedding_dim = {embedding_dim}");
             return Err(Error::from(EmbeddingError::InvalidInput(
                 "Parameters vocab_size and embedding_dim must be greater than zero".to_string(),
             )));
@@ -131,14 +116,8 @@ impl Embeddings {
 
         let std_dev = (6.0 / (vocab_size as f32 + embedding_dim as f32)).sqrt();
 
-        let uniform = Uniform::new_inclusive(-std_dev, std_dev).map_err(|err| {
-            log::error!(
-                "Failed to create uniform distribution with range [{}, {}] due to: {err}",
-                -std_dev,
-                std_dev
-            );
-            EmbeddingError::UniformCreationFailed(err.to_string())
-        })?;
+        let uniform = Uniform::new_inclusive(-std_dev, std_dev)
+            .map_err(|err| EmbeddingError::UniformCreationFailed(err.to_string()))?;
 
         let random_values = Self::generate_random_values(&vocab_size, &embedding_dim, uniform);
 
@@ -164,7 +143,6 @@ impl Embeddings {
     /// - `OutOfVocabularyError`: Occurs if any token index in the `tokens` array is out of bounds for the vocabulary.
     pub fn get_embeddings(&self, tokens: &[usize]) -> Result<Array2<f32>, Error> {
         if tokens.iter().any(|&token| token >= self.vocab_size) {
-            log::error!("Token index is out of vocabulary bounds");
             return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
@@ -184,7 +162,6 @@ impl Embeddings {
     /// - `OutOfVocabularyError`: Raised if the token index is out of bounds of the dictionary.
     pub fn get_embedding(&self, token: usize) -> Result<Array1<f32>, Error> {
         if token >= self.vocab_size {
-            log::error!("Token index {token} is out of vocabulary bounds");
             return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
@@ -206,16 +183,10 @@ impl Embeddings {
     /// - `DimensionMismatchError`: Raised if the dimension of the new embedding does not match the expected embedding dimension.
     pub fn update_embedding(&mut self, index: usize, new_embedding: &Array1<f32>) -> Result<(), Error> {
         if index >= self.vocab_size {
-            log::error!("Token index is out of vocabulary bounds");
             return Err(Error::from(EmbeddingError::OutOfVocabularyError));
         }
 
         if new_embedding.len() != self.embedding_dim {
-            log::error!(
-                "Dimension Mismatch: Expected embedding dimension {}, but got {}",
-                self.embedding_dim,
-                new_embedding.len()
-            );
             return Err(Error::from(EmbeddingError::DimensionMismatchError));
         }
 
@@ -260,15 +231,8 @@ impl Embeddings {
         vocab_size: usize,
         random_values: Vec<f32>,
     ) -> Result<Array2<f32>, EmbeddingError> {
-        Array2::from_shape_vec((embedding_dim, vocab_size), random_values).map_err(|err| {
-            log::error!(
-                "Failed to create embedding matrix with dimensions ({}, {}) due to: {}",
-                embedding_dim,
-                vocab_size,
-                err
-            );
-            EmbeddingError::MatrixCreationFailed(err.to_string())
-        })
+        Array2::from_shape_vec((embedding_dim, vocab_size), random_values)
+            .map_err(|err| EmbeddingError::MatrixCreationFailed(err.to_string()))
     }
 }
 

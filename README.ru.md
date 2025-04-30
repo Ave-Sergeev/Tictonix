@@ -40,14 +40,16 @@
 Добавьте в ваш `Cargo.toml`:
 ```toml
 [dependencies]
-tictonix = "1.0.0"
+tictonix = "1.0.1"
 ```
 
 ### Логирование (Журналирование)
 
 В проекте используется [crate log](https://github.com/rust-lang/log) предоставляющий фасад журналирования.
 
-Вы можете использовать любую совместимую реализацию (например `env_logger`, `fern`, `simple_logger`, `tracing`)
+На данный момент логгирование реализовано только для IO операций (сохранение и загрузка файлов), с сообщением об успешном выполнении.
+
+Вы можете использовать любую совместимую реализацию (например `env_logger`, `fern`, `simple_logger`, `tracing`, ...)
 Для этого достаточно проинициализировать выбранный логгер в вашем приложении перед началом работы.
 
 Пример инициализации с `env_logger`:
@@ -55,7 +57,7 @@ tictonix = "1.0.0"
 fn main() {
     Builder::new()
         .filter_level(LevelFilter::Info)
-        .filter_module("tictonix", LevelFilter::Debug)
+        .filter_module("tictonix", LevelFilter::Info)
         .init();
     // Ваш код
 }
@@ -67,7 +69,7 @@ fn main() {
 
 ### Документация
 
-Смотреть [документацию](https://docs.rs/tictonix/1.0.0/tictonix/) на проект.
+Смотреть [документацию](https://docs.rs/tictonix/1.0.1/tictonix/) на проект.
 
 ### Глоссарий:
 

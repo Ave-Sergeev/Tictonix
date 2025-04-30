@@ -18,10 +18,6 @@ impl PositionalEncoding {
     /// # Returns
     /// An instance of a structure with a matrix of sinusoidal embeddings.
     pub fn new_sinusoidal(max_seq_len: usize, embedding_dim: usize) -> Self {
-        log::debug!(
-            "Creating new matrix of positional encodings (SPE) with max_seq_len: {max_seq_len}, embedding_dim: {embedding_dim}"
-        );
-
         let mut encoding_matrix = Array2::zeros((embedding_dim, max_seq_len));
 
         for pos in 0..max_seq_len {
@@ -48,10 +44,6 @@ impl PositionalEncoding {
     /// # Returns
     /// An instance of a structure with a matrix of relative embeddings.
     pub fn new_relative(max_seq_len: usize, embedding_dim: usize) -> Self {
-        log::debug!(
-            "Creating new matrix of positional encodings (RPE) with max_seq_len: {max_seq_len}, embedding_dim: {embedding_dim}"
-        );
-
         let mut encoding_matrix = Array2::zeros((embedding_dim, max_seq_len));
 
         for pos in 0..max_seq_len {
@@ -79,10 +71,6 @@ impl PositionalEncoding {
     /// # Returns
     /// A struct instance with an embedding matrix initialized using `RoPE`.
     pub fn new_rope(max_seq_len: usize, embedding_dim: usize) -> Self {
-        log::debug!(
-            "Creating new matrix of positional encodings (RoPE) with max_seq_len: {max_seq_len}, embedding_dim: {embedding_dim}"
-        );
-
         let mut encoding_matrix = Array2::zeros((embedding_dim, max_seq_len));
 
         for pos in 0..max_seq_len {
@@ -117,7 +105,6 @@ impl PositionalEncoding {
     /// - `ShapeMismatch`: Occurs if the dimensions of the input matrix do not match the expected embedding dimension and maximum sequence length.
     pub fn apply_rope(&self, input: &Array2<f32>) -> Result<Array2<f32>, Error> {
         if input.shape() != [self.embedding_dim, self.max_seq_len] {
-            log::error!("Shape mismatch: expected [{}, {}]", self.embedding_dim, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::ShapeMismatch));
         }
 
@@ -161,12 +148,10 @@ impl PositionalEncoding {
         let seq_len = embeddings.shape()[1];
 
         if seq_len > self.max_seq_len {
-            log::error!("Sequence length {} exceeds maximum allowed length {}", seq_len, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
         if embeddings.shape()[0] != self.embedding_dim {
-            log::error!("Embedding dimension mismatch: expected {}", self.embedding_dim);
             return Err(Error::from(PositionalEncodingError::EmbeddingDimensionMismatch));
         }
 
@@ -188,7 +173,6 @@ impl PositionalEncoding {
     /// - `SequenceLengthExceeded`: Occurs if the requested sequence length exceeds the maximum sequence length supported by the positional encoding.
     pub fn get_positional_encoding_slice(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
         if seq_len > self.max_seq_len {
-            log::error!("Sequence length {} exceeds maximum allowed length {}", seq_len, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 
@@ -208,7 +192,6 @@ impl PositionalEncoding {
     /// - `PositionOutOfBounds`: Occurs if the requested position exceeds the maximum sequence length supported by the positional encoding.
     pub fn get_positional_encoding(&self, position: usize) -> Result<Array1<f32>, Error> {
         if position >= self.max_seq_len {
-            log::error!("Position {} is out of bounds. Maximum sequence length is {}", position, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::PositionOutOfBounds));
         }
 
@@ -231,7 +214,6 @@ impl PositionalEncoding {
 
     fn get_slice_encoding(&self, seq_len: usize) -> Result<Array2<f32>, Error> {
         if seq_len > self.max_seq_len {
-            log::error!("Sequence length {} exceeds maximum allowed length {}", seq_len, self.max_seq_len);
             return Err(Error::from(PositionalEncodingError::SequenceLengthExceeded));
         }
 

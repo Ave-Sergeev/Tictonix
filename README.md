@@ -42,14 +42,16 @@ own implementation of `LLM` on `Transformer` architecture.
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-tictonix = "1.0.0"
+tictonix = "1.0.1"
 ```
 
 ### Logging
 
 The project uses [crate log](https://github.com/rust-lang/log) which provides a logging facade.
 
-You can use any compatible implementation (e.g. `env_logger`, `fern`, `simple_logger`, `tracing`)
+At the moment logging is implemented only for IO operations (saving and loading files), with a success message.
+
+You can use any compatible implementation (e.g. `env_logger`, `fern`, `simple_logger`, `tracing`, ...)
 To do this, just initialize the selected logger in your application before starting.
 
 Example of initialization with `env_logger`:
@@ -57,7 +59,7 @@ Example of initialization with `env_logger`:
 fn main() {
     Builder::new()
         .filter_level(LevelFilter::Info)
-        .filter_module("tictonix", LevelFilter::Debug)
+        .filter_module("tictonix", LevelFilter::Info)
         .init();
     // Your code
 }
@@ -69,7 +71,7 @@ See [examples for usage](https://github.com/Ave-Sergeev/Tictonix/blob/main/examp
 
 ### Documentation
 
-See [documentation](https://docs.rs/tictonix/1.0.0/tictonix/) for the project.
+See [documentation](https://docs.rs/tictonix/1.0.1/tictonix/) for the project.
 
 ### Glossary
 
